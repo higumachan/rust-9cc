@@ -4,7 +4,7 @@ assert() {
   input="$2"
   step="$3"
 
-  cargo run --bin step$3 -- "$input" > tmp.s
+  cargo run --bin step$3 -- "$input" > tmp.s 2> /dev/null
   cc -o tmp tmp.s
   ./tmp
   actual="$?"
@@ -20,5 +20,6 @@ assert() {
 assert 0 0 01
 assert 42 42 01
 assert 21 "5+20-4" 02
+assert 41 " 12 + 34 - 5 " 03
 
 echo OK
