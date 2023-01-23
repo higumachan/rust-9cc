@@ -1,0 +1,9 @@
+version: '3'
+services:
+  r9cc:
+    platform: linux/x86_64
+    build: .
+    volumes:
+      - .:/r9cc
+    working_dir: /r9cc
+    command: cargo run --bin run_test
