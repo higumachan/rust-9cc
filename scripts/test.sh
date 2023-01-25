@@ -4,10 +4,11 @@ assert() {
   input="$2"
   step="$3"
 
-  cargo run --bin step$3 -- "$input" > tmp.s 2> /dev/null
-  cc -o tmp tmp.s
+  cargo run --bin rust-9cc -- "$input" > tmp.s 2> /dev/null
+  cc -target x86_64-macos-none -o tmp tmp.s
   ./tmp
-  actual="$?"
+
+  actual=$?
 
   if [ "$actual" = "$expected" ]; then
     echo "$input => $actual"

@@ -1,4 +1,6 @@
 use std::env::args;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 use std::slice::Iter;
 use std::str::FromStr;
@@ -94,11 +96,38 @@ fn parse_number(iter: &mut Peekable<impl Iterator<Item = char>>) -> i64 {
     i64::from_str(s.as_str()).unwrap()
 }
 
-fn tokenize(input: &str) -> Vec<Token> {
-    let mut cs = input.chars().peekable();
+#[derive(Debug)]
+struct TokenizeError {
+    message: String,
+    source_code: String,
+    pos: usize,
+}
+
+impl TokenizeError {
+    pub fn new(message: String, source_code: String, pos: usize) -> Self {
+        Self {
+            message,
+            source_code,
+            pos,
+        }
+    }
+}
+
+impl Display for TokenizeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+impl Error for TokenizeError {}
+
+type TokenizeResult<T> = std::result::Result<T, TokenizeError>;
+
+fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
+    let mut cs = input.chars().enumerate().peekable();
     let mut tokens = vec![];
 
-    while let Some(c) = cs.peek() {
+    while let Some((pos, c)) = cs.peek() {
         match c {
             ' ' => {
                 cs.next();
@@ -112,14 +141,18 @@ fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::Num(num));
             }
             _ => {
-                panic!("トークナイズ出来ません");
+                return Err(TokenizeError::new(
+                    "トークナイズ出来ません".to_string(),
+                    input.to_string(),
+                    pos,
+                ))
             }
         }
     }
 
     tokens.push(Token::Eof);
 
-    tokens
+    Ok(tokens)
 }
 
 fn main() {
