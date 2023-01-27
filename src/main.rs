@@ -1,3 +1,4 @@
+use crate::Token::Reserved;
 use std::env::args;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -107,7 +108,7 @@ impl TokenStream {
         Ok(node)
     }
 
-    fn expr(&mut self) -> ParseResult<Node> {
+    fn add(&mut self) -> ParseResult<Node> {
         let mut node = self.mul()?;
 
         loop {
@@ -123,6 +124,52 @@ impl TokenStream {
         }
 
         Ok(node)
+    }
+
+    fn relational(&mut self) -> ParseResult<Node> {
+        let mut node = self.add()?;
+
+        loop {
+            if self.consume("<") {
+                let right = self.add()?;
+                node = Node::new_op2(Operator2::Lt, Box::new(node), Box::new(right))
+            } else if self.consume("<=") {
+                let right = self.add()?;
+                node = Node::new_op2(Operator2::Lte, Box::new(node), Box::new(right))
+            } else if self.consume(">") {
+                let right = self.add()?;
+                node = Node::new_op2(Operator2::Lt, Box::new(right), Box::new(node))
+            } else if self.consume(">=") {
+                let right = self.add()?;
+                node = Node::new_op2(Operator2::Lte, Box::new(right), Box::new(node))
+            } else {
+                break;
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn equality(&mut self) -> ParseResult<Node> {
+        let mut node = self.relational()?;
+
+        loop {
+            if self.consume("==") {
+                let right = self.relational()?;
+                node = Node::new_op2(Operator2::Eq, Box::new(node), Box::new(right))
+            } else if self.consume("!=") {
+                let right = self.relational()?;
+                node = Node::new_op2(Operator2::Eq, Box::new(node), Box::new(right))
+            } else {
+                break;
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn expr(&mut self) -> ParseResult<Node> {
+        self.equality()
     }
 
     fn consume(&mut self, op: &str) -> bool {
@@ -174,6 +221,10 @@ enum Operator2 {
     Sub,
     Mul,
     Div,
+    Eq,
+    Ne,
+    Lt,
+    Lte,
 }
 
 #[derive(Debug)]
@@ -217,6 +268,26 @@ impl Node {
                     Operator2::Div => {
                         println!("  cqo");
                         println!("  idiv rdi");
+                    }
+                    Operator2::Eq => {
+                        println!("  cmp rax, rdi");
+                        println!("  sete al");
+                        println!("  movzb rax, al");
+                    }
+                    Operator2::Ne => {
+                        println!("  cmp rax, rdi");
+                        println!("  setne al");
+                        println!("  movzb rax, al");
+                    }
+                    Operator2::Lt => {
+                        println!("  cmp rax, rdi");
+                        println!("  setl al");
+                        println!("  movzb rax, al");
+                    }
+                    Operator2::Lte => {
+                        println!("  cmp rax, rdi");
+                        println!("  setle al");
+                        println!("  movzb rax, al");
                     }
                 }
 
@@ -274,31 +345,71 @@ impl Error for TokenizeError {}
 
 type TokenizeResult<T> = std::result::Result<T, TokenizeError>;
 
+fn match_string<T: Iterator<Item = (usize, char)> + Clone>(p_iter: &T, s: &str) -> bool {
+    let p_iter = p_iter.clone();
+    s.chars()
+        .zip(p_iter.take(s.len()))
+        .all(|(c1, (_, c2))| c1 == c2)
+}
+
 fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
     let mut cs = input.chars().enumerate().peekable();
     let mut tokens = vec![];
 
     while let Some((pos, c)) = cs.peek().cloned() {
-        match c {
-            ' ' => {
-                cs.next();
-            }
-            '+' | '-' => {
-                tokens.push(Token::Reserved(c.to_string()));
-                cs.next();
-            }
-            c if c.is_ascii_digit() => {
-                let num = parse_number(&mut cs)
-                    .map_err(|e| TokenizeError::new(e.message, 0, input.to_string(), pos))?;
-                tokens.push(Token::Num(num));
-            }
-            _ => {
-                return Err(TokenizeError::new(
-                    "トークナイズ出来ません".to_string(),
-                    0,
-                    input.to_string(),
-                    pos,
-                ))
+        if match_string(&cs, "==") {
+            tokens.push(Reserved("==".to_string()));
+            cs.next();
+            cs.next();
+        } else if match_string(&cs, "!=") {
+            tokens.push(Reserved("!=".to_string()));
+            cs.next();
+            cs.next();
+        } else if match_string(&cs, ">=") {
+            tokens.push(Reserved(">=".to_string()));
+            cs.next();
+            cs.next();
+        } else if match_string(&cs, "<=") {
+            tokens.push(Reserved("<=".to_string()));
+            cs.next();
+            cs.next();
+        } else if match_string(&cs, "+") {
+            tokens.push(Reserved("+".to_string()));
+            cs.next();
+        } else if match_string(&cs, "-") {
+            tokens.push(Reserved("-".to_string()));
+            cs.next();
+        } else if match_string(&cs, "<") {
+            tokens.push(Reserved("<".to_string()));
+            cs.next();
+        } else if match_string(&cs, ">") {
+            tokens.push(Reserved(">".to_string()));
+            cs.next();
+        } else if match_string(&cs, "(") {
+            tokens.push(Reserved("(".to_string()));
+            cs.next();
+        } else if match_string(&cs, ")") {
+            tokens.push(Reserved(")".to_string()));
+            cs.next();
+        } else {
+            match c {
+                ' ' => {
+                    cs.next();
+                }
+
+                c if c.is_ascii_digit() => {
+                    let num = parse_number(&mut cs)
+                        .map_err(|e| TokenizeError::new(e.message, 0, input.to_string(), pos))?;
+                    tokens.push(Token::Num(num));
+                }
+                _ => {
+                    return Err(TokenizeError::new(
+                        "トークナイズ出来ません".to_string(),
+                        0,
+                        input.to_string(),
+                        pos,
+                    ))
+                }
             }
         }
     }
@@ -319,8 +430,8 @@ fn main() {
     let node = token_stream.expr().unwrap();
 
     println!(".intel_syntax noprefix");
-    println!(".globl _main");
-    println!("_main:");
+    println!(".globl main");
+    println!("main:");
 
     node.gen();
 
