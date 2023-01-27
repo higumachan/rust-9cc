@@ -41,6 +41,20 @@ impl Token {
     }
 }
 
+#[derive(Debug)]
+enum ParseError {
+    ExpectReserved(String),
+    ExpectNumber,
+}
+
+impl Display for ParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
+type ParseResult<T> = std::result::Result<T, ParseError>;
+
 struct TokenStream {
     inner: Peekable<IntoIter<Token>>,
 }
@@ -50,6 +64,65 @@ impl TokenStream {
         Self {
             inner: tokens.into_iter().peekable(),
         }
+    }
+
+    fn primary(&mut self) -> ParseResult<Node> {
+        if self.consume("(") {
+            let node = self.expr()?;
+            self.expect(")")?;
+            Ok(node)
+        } else {
+            let number = self.expect_number()?;
+            Ok(Node::Num(number))
+        }
+    }
+
+    fn unary(&mut self) -> ParseResult<Node> {
+        if self.consume("+") {
+            self.primary()
+        } else if self.consume("-") {
+            Ok(Node::new_op2(
+                Operator2::Sub,
+                Box::new(Node::Num(0)),
+                Box::new(self.primary()?),
+            ))
+        } else {
+            self.primary()
+        }
+    }
+
+    fn mul(&mut self) -> ParseResult<Node> {
+        let mut node = self.unary()?;
+
+        loop {
+            node = if self.consume("*") {
+                Node::new_op2(Operator2::Mul, Box::new(node), Box::new(self.unary()?))
+            } else if self.consume("/") {
+                Node::new_op2(Operator2::Div, Box::new(node), Box::new(self.unary()?))
+            } else {
+                break;
+            }
+        }
+
+        Ok(node)
+    }
+
+    fn expr(&mut self) -> ParseResult<Node> {
+        let mut node = self.mul()?;
+
+        loop {
+            if self.consume("+") {
+                let right = self.mul()?;
+                node = Node::new_op2(Operator2::Add, Box::new(node), Box::new(right))
+            } else if self.consume("-") {
+                let right = self.mul()?;
+                node = Node::new_op2(Operator2::Sub, Box::new(node), Box::new(right))
+            } else {
+                break;
+            }
+        }
+
+        Ok(node)
     }
 
     fn consume(&mut self, op: &str) -> bool {
@@ -62,21 +135,17 @@ impl TokenStream {
         }
     }
 
-    fn expect(&mut self, op: &str) {
+    fn expect(&mut self, op: &str) -> ParseResult<()> {
         match self.inner.next().unwrap() {
-            Token::Reserved(s) if s.as_str() == op => {}
-            _ => {
-                panic!("'{:?}'ではありません", op);
-            }
+            Token::Reserved(s) if s.as_str() == op => Ok(()),
+            _ => Err(ParseError::ExpectReserved(op.to_string())),
         }
     }
 
-    fn expect_number(&mut self) -> i64 {
+    fn expect_number(&mut self) -> ParseResult<i64> {
         match self.inner.next().unwrap() {
-            Token::Num(n) => n,
-            _ => {
-                panic!("数値ではありません");
-            }
+            Token::Num(n) => Ok(n),
+            _ => return Err(ParseError::ExpectNumber),
         }
     }
 
@@ -97,6 +166,64 @@ fn parse_number(
         s.push(c);
     }
     i64::from_str(s.as_str()).map_err(|_| GeneralError::new("整数がパースできません".to_string()))
+}
+
+#[derive(Debug)]
+enum Operator2 {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Debug)]
+enum Node {
+    Operator2 {
+        op: Operator2,
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    Num(i64),
+}
+
+impl Node {
+    pub fn new_op2(op: Operator2, left: Box<Self>, right: Box<Self>) -> Self {
+        Self::Operator2 { op, left, right }
+    }
+}
+
+impl Node {
+    fn gen(&self) {
+        match self {
+            Node::Num(n) => {
+                println!("  push {}", n);
+            }
+            Node::Operator2 { op, left, right } => {
+                left.gen();
+                right.gen();
+                println!("  pop rdi");
+                println!("  pop rax");
+
+                match op {
+                    Operator2::Add => {
+                        println!("  add rax, rdi");
+                    }
+                    Operator2::Sub => {
+                        println!("  sub rax, rdi");
+                    }
+                    Operator2::Mul => {
+                        println!("  mul rdi");
+                    }
+                    Operator2::Div => {
+                        println!("  cqo");
+                        println!("  idiv rdi");
+                    }
+                }
+
+                println!("  push rax");
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -185,26 +312,18 @@ fn main() {
     let argv: Vec<_> = args().collect();
     assert_eq!(args().len(), 2);
 
-    println!(".intel_syntax noprefix");
-    println!(".globl _main");
-    println!("_main:");
-
     let p = argv[1].as_str();
     let mut tokens = tokenize(p).unwrap();
 
     let mut token_stream = TokenStream::new(tokens);
-    let first = token_stream.expect_number();
-    println!("  mov rax, {}", first);
+    let node = token_stream.expr().unwrap();
 
-    while !token_stream.at_eof() {
-        if token_stream.consume("+") {
-            println!("  add rax, {}", token_stream.expect_number());
-            continue;
-        }
+    println!(".intel_syntax noprefix");
+    println!(".globl _main");
+    println!("_main:");
 
-        token_stream.expect("-");
-        println!("  sub rax, {}", token_stream.expect_number());
-    }
+    node.gen();
 
-    println!("  ret\n");
+    println!("  pop rax");
+    println!("  ret");
 }
