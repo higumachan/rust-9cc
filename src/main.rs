@@ -1,9 +1,10 @@
 mod generator;
 mod parser;
+mod tokenizer;
 
 use crate::generator::Generator;
-use crate::parser::tokenize;
 use crate::parser::TokenStream;
+use crate::tokenizer::tokenize;
 use std::env::args;
 
 fn main() {
