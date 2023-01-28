@@ -47,8 +47,12 @@ impl TokenStream {
 
             if self.consume_reserve("(") {
                 let mut args = vec![];
-                while !self.consume_reserve(")") {
+                if !self.consume_reserve(")") {
                     args.push(self.expr()?);
+                    while !self.consume_reserve(")") {
+                        self.expect(",")?;
+                        args.push(self.expr()?);
+                    }
                 }
                 Ok(Node::CallFunction(CallFunction::new(ident_name, args)))
             } else {

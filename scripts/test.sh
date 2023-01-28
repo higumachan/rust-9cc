@@ -5,6 +5,7 @@ assert() {
   expected_stdout="$3"
 
   cargo run --bin rust-9cc -- "$input" > tmp.s 2> /dev/null
+  cc -o other.o -c clang/other.c
   cc -o tmp tmp.s other.o
   ./tmp > output.txt
 
@@ -27,6 +28,7 @@ assert() {
   fi
 }
 
+assert 0 "zig(1, 3); return 0;" "1 3"
 assert 0 "bar(1, 3); return 0;" "4"
 assert 0 "foo(); return 0;" "Hello World"
 assert 2 "{i = 0; i = i + 1; i = i + 1; return i;}"

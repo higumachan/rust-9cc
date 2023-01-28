@@ -11,3 +11,7 @@ int foo() {
 int bar(int a, int b) {
     printf("%d\n", a + b);
 }
+
+int zig(int a, int b) {
+    printf("%d %d\n", a, b);
+}

@@ -7,6 +7,7 @@ pub struct Generator {
 #[derive(Debug)]
 pub enum GenerateError {
     NotLeftValue,
+    CallArgsOverFlow,
 }
 
 type GenerateResult = Result<(), GenerateError>;
@@ -146,7 +147,18 @@ impl Generator {
             }
 
             Node::CallFunction(call_function) => {
+                if call_function.args().len() > 6 {
+                    return Err(GenerateError::CallArgsOverFlow);
+                }
+                let registers = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+                for arg in call_function.args().iter().rev() {
+                    self.gen(arg)?;
+                }
+                for (_, register) in call_function.args().iter().zip(registers) {
+                    println!("  pop {}", register);
+                }
                 println!("  call {}", call_function.name());
+                println!("  pop rax");
             }
         }
 
