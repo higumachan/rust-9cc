@@ -1,4 +1,5 @@
-use crate::parser::{Node, Operator2};
+use crate::parser::{LocalVariable, Node, Operator2};
+use std::collections::HashMap;
 
 pub struct Generator {}
 
@@ -29,7 +30,7 @@ impl Generator {
             Node::Num(n) => {
                 println!("  push {}", n);
             }
-            Node::LocalValue(a) => {
+            Node::LocalVariable(a) => {
                 self.gen_lval(node)?;
                 println!("  pop rax");
                 println!("  mov rax, [rax]");

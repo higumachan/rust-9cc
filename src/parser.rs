@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
@@ -51,16 +52,22 @@ impl Display for ParseError {
     }
 }
 
+const INTEGER_SIZE: usize = 8;
+
 pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 pub struct TokenStream {
     inner: Peekable<IntoIter<Token>>,
+    local_variables: HashMap<String, LocalVariable>,
+    next_offset: usize,
 }
 
 impl TokenStream {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             inner: tokens.into_iter().peekable(),
+            local_variables: HashMap::new(),
+            next_offset: INTEGER_SIZE,
         }
     }
 
@@ -70,10 +77,19 @@ impl TokenStream {
             self.expect(")")?;
             Ok(node)
         } else if let Some(ident_name) = self.consume_ident() {
-            Ok(Node::LocalValue(LocalValue::new(
-                ident_name.to_string(),
-                ident_name.chars().next().unwrap() as usize - 'a' as usize,
-            )))
+            let ident_name = ident_name.clone();
+            let next_offset = &mut self.next_offset;
+            let lv = self
+                .local_variables
+                .entry(ident_name.clone())
+                .or_insert_with(move || {
+                    let local_variable = LocalVariable::new(ident_name.to_string(), *next_offset);
+                    *next_offset += INTEGER_SIZE;
+
+                    local_variable
+                })
+                .clone();
+            Ok(Node::LocalVariable(lv))
         } else {
             let number = self.expect_number()?;
             Ok(Node::Num(number))
@@ -263,13 +279,13 @@ pub enum Operator2 {
     Lte,
 }
 
-#[derive(Debug)]
-pub struct LocalValue {
+#[derive(Debug, Clone)]
+pub struct LocalVariable {
     name: String,
     offset: usize,
 }
 
-impl LocalValue {
+impl LocalVariable {
     pub fn new(name: String, offset: usize) -> Self {
         Self { name, offset }
     }
@@ -292,7 +308,7 @@ pub enum Node {
         left: Box<Self>,
         right: Box<Self>,
     },
-    LocalValue(LocalValue),
+    LocalVariable(LocalVariable),
     Num(i64),
 }
 
@@ -305,9 +321,9 @@ impl Node {
         Self::Assign { left, right }
     }
 
-    pub fn as_local_value(&self) -> Option<&LocalValue> {
+    pub fn as_local_value(&self) -> Option<&LocalVariable> {
         match self {
-            Self::LocalValue(s) => Some(s),
+            Self::LocalVariable(s) => Some(s),
             _ => None,
         }
     }
@@ -368,6 +384,26 @@ fn match_string<T: Iterator<Item = (usize, char)> + Clone>(p_iter: &T, s: &str) 
         .all(|(c1, (_, c2))| c1 == c2)
 }
 
+fn match_variable_string<T: Iterator<Item = (usize, char)> + Clone>(p_iter: &T) -> Option<String> {
+    let mut p_iter2 = p_iter.clone();
+
+    if let Some((_, c)) = p_iter2.next() {
+        if c.is_ascii_alphabetic() {
+            let mut s = c.to_string();
+            s.extend(
+                p_iter2
+                    .map(|(_, c)| c)
+                    .take_while(|c| c.is_ascii_alphanumeric()),
+            );
+            Some(s)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
     let mut cs = input.chars().enumerate().peekable();
     let mut tokens = vec![];
@@ -413,13 +449,15 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, "=") {
             tokens.push(Token::Reserved("=".to_string()));
             cs.next();
+        } else if let Some(name) = match_variable_string(&mut cs) {
+            let n = name.len();
+            tokens.push(Token::Ident(name));
+            for _ in 0..n {
+                cs.next();
+            }
         } else {
             match c {
                 ' ' => {
-                    cs.next();
-                }
-                c if 'a' <= c && c <= 'z' => {
-                    tokens.push(Token::Ident(c.to_string()));
                     cs.next();
                 }
                 c if c.is_ascii_digit() => {

@@ -23,15 +23,14 @@ fn main() {
 
     println!("  push rbp");
     println!("  mov rbp, rsp");
-    println!("  sub rbp, {}", 8 * 26);
+    println!("  sub rsp, {}", 8 * 26);
 
     for line in &code {
-        dbg!(line);
         generator.gen(&line).unwrap();
         println!("  pop rax");
     }
 
-    // println!("  mov rsp, rbp");
+    println!("  mov rsp, rbp");
     println!("  pop rbp");
     println!("  ret");
 }
