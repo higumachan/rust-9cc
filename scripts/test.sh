@@ -5,7 +5,7 @@ assert() {
   step="$3"
 
   cargo run --bin rust-9cc -- "$input" > tmp.s 2> /dev/null
-  cc -target x86_64-linux-gnu -o tmp tmp.s
+  cc -o tmp tmp.s
   ./tmp
 
   actual=$?
@@ -28,6 +28,14 @@ assert 41 " 12 + 34 - +5  " 03
 assert 2 "1++1" 03
 assert 0 "1+-1" 03
 assert 1 "1 == 1" 03
+assert 1 "1 <= 1" 03
+assert 1 "1 >= 1" 03
 assert 0 "1 == 2" 03
+assert 1 "1 < 2" 03
+assert 1 "1 <= 2" 03
+assert 0 "1 > 2" 03
+assert 0 "1 >= 2" 03
+assert 0 "1 > 2" 03
+assert 0 "1 >= 2" 03
 
 echo OK
