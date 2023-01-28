@@ -1,6 +1,5 @@
 use crate::parser::{Node, Operator2};
 
-
 pub struct Generator {
     next_label: usize,
 }
@@ -138,6 +137,12 @@ impl Generator {
                 }
                 println!("jmp .Lbegin{}", for_label);
                 println!(".Lend{}:", for_label);
+            }
+            Node::Block(statements) => {
+                for s in statements {
+                    self.gen(s)?;
+                    println!("pop rax");
+                }
             }
         }
 

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 
-
 use std::vec::IntoIter;
 
 #[derive(Debug)]
@@ -166,7 +165,13 @@ impl TokenStream {
     }
 
     pub fn statement(&mut self) -> ParseResult<Node> {
-        if self.consume_if() {
+        if self.consume_reserve("{") {
+            let mut statements = vec![];
+            while !self.consume_reserve("}") {
+                statements.push(self.statement()?);
+            }
+            Ok(Node::Block(statements))
+        } else if self.consume_if() {
             self.expect("(")?;
             let cond = self.expr()?;
             self.expect(")")?;
@@ -454,6 +459,7 @@ pub enum Node {
     Return(Box<Self>),
     LocalVariable(LocalVariable),
     Num(i64),
+    Block(Vec<Node>),
 }
 
 impl Node {
