@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
+use std::ops::Neg;
 use std::str::FromStr;
 use std::vec::IntoIter;
 
@@ -13,6 +14,8 @@ pub enum Token {
     Return,
     If,
     Else,
+    For,
+    While,
     Eof,
 }
 
@@ -218,6 +221,50 @@ impl TokenStream {
                 then_statement.into(),
                 else_statement.map(Box::new),
             )))
+        } else if self.consume_for() {
+            self.expect("(")?;
+            let init = if !self.consume_reserve(";") {
+                let init = self.expr()?;
+                self.expect(";")?;
+                Some(init)
+            } else {
+                None
+            };
+            let cond = if !self.consume_reserve(";") {
+                let cond = self.expr()?;
+                self.expect(";")?;
+                Some(cond)
+            } else {
+                None
+            };
+            let next = if !self.consume_reserve(")") {
+                let next = self.expr()?;
+                self.expect(")")?;
+                Some(next)
+            } else {
+                None
+            };
+
+            let body = self.statement()?;
+
+            Ok(Node::For(For::new(
+                init.map(Box::new),
+                cond.map(Box::new),
+                next.map(Box::new),
+                body.into(),
+            )))
+        } else if self.consume_while() {
+            self.expect("(")?;
+            let cond = self.expr()?;
+            self.expect(")")?;
+            let body = self.statement()?;
+
+            Ok(Node::For(For::new(
+                None,
+                Some(cond.into()),
+                None,
+                body.into(),
+            )))
         } else {
             let is_return = self.consume_return();
 
@@ -265,6 +312,26 @@ impl TokenStream {
     fn consume_else(&mut self) -> bool {
         match self.inner.peek().unwrap() {
             Token::Else => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn consume_for(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::For => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn consume_while(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::While => {
                 self.inner.next().unwrap();
                 true
             }
@@ -386,6 +453,42 @@ impl IfElse {
 }
 
 #[derive(Debug)]
+pub struct For {
+    init: Option<Box<Node>>,
+    cond: Option<Box<Node>>,
+    next: Option<Box<Node>>,
+    body: Box<Node>,
+}
+
+impl For {
+    pub fn new(
+        init: Option<Box<Node>>,
+        cond: Option<Box<Node>>,
+        next: Option<Box<Node>>,
+        body: Box<Node>,
+    ) -> Self {
+        Self {
+            init,
+            cond,
+            next,
+            body,
+        }
+    }
+    pub fn init(&self) -> &Option<Box<Node>> {
+        &self.init
+    }
+    pub fn cond(&self) -> &Option<Box<Node>> {
+        &self.cond
+    }
+    pub fn next(&self) -> &Option<Box<Node>> {
+        &self.next
+    }
+    pub fn body(&self) -> &Box<Node> {
+        &self.body
+    }
+}
+
+#[derive(Debug)]
 pub enum Node {
     Operator2 {
         op: Operator2,
@@ -397,6 +500,7 @@ pub enum Node {
         right: Box<Self>,
     },
     IfElse(IfElse),
+    For(For),
     Return(Box<Self>),
     LocalVariable(LocalVariable),
     Num(i64),
@@ -552,6 +656,16 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, "else") {
             tokens.push(Token::Else);
             for _ in 0..4 {
+                cs.next();
+            }
+        } else if match_string(&cs, "for") {
+            tokens.push(Token::For);
+            for _ in 0..3 {
+                cs.next();
+            }
+        } else if match_string(&cs, "while") {
+            tokens.push(Token::While);
+            for _ in 0..5 {
                 cs.next();
             }
         } else if let Some(name) = match_variable_string(&mut cs) {

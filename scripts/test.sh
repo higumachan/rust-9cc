@@ -18,6 +18,8 @@ assert() {
   fi
 }
 
+assert 55 "foo = 0; i = 1; while(foo < 55) foo = foo + i; return foo;"
+assert 55 "foo = 0; for (i = 1; i <= 10; i = i + 1) foo = foo + i; return foo;"
 assert 10 "foo = 1; bar = 0; if (foo == 1)  bar = 10; return bar;"
 assert 0 "foo = 0; bar = 0; if (foo == 1)  bar = 10; return bar;"
 assert 20 "foo = 0; if (foo == 1)  return 10;  else  return 20; "

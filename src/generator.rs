@@ -2,7 +2,7 @@ use crate::parser::{LocalVariable, Node, Operator2};
 use std::collections::HashMap;
 
 pub struct Generator {
-    next_cond_label: usize,
+    next_label: usize,
 }
 
 #[derive(Debug)]
@@ -14,12 +14,12 @@ type GenerateResult = Result<(), GenerateError>;
 
 impl Generator {
     pub fn new() -> Self {
-        Self { next_cond_label: 0 }
+        Self { next_label: 0 }
     }
 
-    fn assign_next_cond_label(&mut self) -> usize {
-        let r = self.next_cond_label;
-        self.next_cond_label += 1;
+    fn assign_next_label(&mut self) -> usize {
+        let r = self.next_label;
+        self.next_label += 1;
         r
     }
 
@@ -107,7 +107,7 @@ impl Generator {
             }
 
             Node::IfElse(if_and_else) => {
-                let if_label = self.assign_next_cond_label();
+                let if_label = self.assign_next_label();
                 self.gen(if_and_else.condition().as_ref())?;
                 println!("  pop rax");
                 println!("  cmp rax, 0");
@@ -119,6 +119,25 @@ impl Generator {
                     self.gen(else_statement.as_ref())?;
                 }
                 println!(".Lend{}:", if_label);
+            }
+            Node::For(for_) => {
+                let for_label = self.assign_next_label();
+                if let Some(init) = for_.init() {
+                    self.gen(init)?;
+                }
+                println!(".Lbegin{}:", for_label);
+                if let Some(cond) = for_.cond() {
+                    self.gen(cond)?;
+                    println!("  pop rax");
+                    println!("  cmp rax, 0");
+                    println!("  je .Lend{}", for_label);
+                }
+                self.gen(for_.body())?;
+                if let Some(next) = for_.next() {
+                    self.gen(next)?;
+                }
+                println!("jmp .Lbegin{}", for_label);
+                println!(".Lend{}:", for_label);
             }
         }
 
