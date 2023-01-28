@@ -44,18 +44,28 @@ impl TokenStream {
             Ok(node)
         } else if let Some(ident_name) = self.consume_ident() {
             let ident_name = ident_name.clone();
-            let next_offset = &mut self.next_offset;
-            let lv = self
-                .local_variables
-                .entry(ident_name.clone())
-                .or_insert_with(move || {
-                    let local_variable = LocalVariable::new(ident_name.to_string(), *next_offset);
-                    *next_offset += INTEGER_SIZE;
 
-                    local_variable
-                })
-                .clone();
-            Ok(Node::LocalVariable(lv))
+            if self.consume_reserve("(") {
+                let mut args = vec![];
+                while !self.consume_reserve(")") {
+                    args.push(self.expr()?);
+                }
+                Ok(Node::CallFunction(CallFunction::new(ident_name, args)))
+            } else {
+                let next_offset = &mut self.next_offset;
+                let lv = self
+                    .local_variables
+                    .entry(ident_name.clone())
+                    .or_insert_with(move || {
+                        let local_variable =
+                            LocalVariable::new(ident_name.to_string(), *next_offset);
+                        *next_offset += INTEGER_SIZE;
+
+                        local_variable
+                    })
+                    .clone();
+                Ok(Node::LocalVariable(lv))
+            }
         } else {
             let number = self.expect_number()?;
             Ok(Node::Num(number))
@@ -444,6 +454,24 @@ impl For {
 }
 
 #[derive(Debug)]
+pub struct CallFunction {
+    name: String,
+    args: Vec<Node>,
+}
+
+impl CallFunction {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn args(&self) -> &Vec<Node> {
+        &self.args
+    }
+    pub fn new(name: String, args: Vec<Node>) -> Self {
+        Self { name, args }
+    }
+}
+
+#[derive(Debug)]
 pub enum Node {
     Operator2 {
         op: Operator2,
@@ -454,6 +482,7 @@ pub enum Node {
         left: Box<Self>,
         right: Box<Self>,
     },
+    CallFunction(CallFunction),
     IfElse(IfElse),
     For(For),
     Return(Box<Self>),

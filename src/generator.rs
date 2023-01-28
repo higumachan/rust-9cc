@@ -144,6 +144,10 @@ impl Generator {
                     println!("pop rax");
                 }
             }
+
+            Node::CallFunction(call_function) => {
+                println!("  call {}", call_function.name());
+            }
         }
 
         Ok(())
