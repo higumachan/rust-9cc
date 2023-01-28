@@ -7,6 +7,7 @@ use std::vec::IntoIter;
 #[derive(Debug)]
 pub enum Token {
     Reserved(String),
+    Ident(String),
     Num(i64),
     Eof,
 }
@@ -64,10 +65,15 @@ impl TokenStream {
     }
 
     pub fn primary(&mut self) -> ParseResult<Node> {
-        if self.consume("(") {
+        if self.consume_reserve("(") {
             let node = self.expr()?;
             self.expect(")")?;
             Ok(node)
+        } else if let Some(ident_name) = self.consume_ident() {
+            Ok(Node::LocalValue(LocalValue::new(
+                ident_name.to_string(),
+                ident_name.chars().next().unwrap() as usize - 'a' as usize,
+            )))
         } else {
             let number = self.expect_number()?;
             Ok(Node::Num(number))
@@ -75,9 +81,9 @@ impl TokenStream {
     }
 
     pub fn unary(&mut self) -> ParseResult<Node> {
-        if self.consume("+") {
+        if self.consume_reserve("+") {
             self.primary()
-        } else if self.consume("-") {
+        } else if self.consume_reserve("-") {
             Ok(Node::new_op2(
                 Operator2::Sub,
                 Box::new(Node::Num(0)),
@@ -92,9 +98,9 @@ impl TokenStream {
         let mut node = self.unary()?;
 
         loop {
-            node = if self.consume("*") {
+            node = if self.consume_reserve("*") {
                 Node::new_op2(Operator2::Mul, Box::new(node), Box::new(self.unary()?))
-            } else if self.consume("/") {
+            } else if self.consume_reserve("/") {
                 Node::new_op2(Operator2::Div, Box::new(node), Box::new(self.unary()?))
             } else {
                 break;
@@ -108,10 +114,10 @@ impl TokenStream {
         let mut node = self.mul()?;
 
         loop {
-            if self.consume("+") {
+            if self.consume_reserve("+") {
                 let right = self.mul()?;
                 node = Node::new_op2(Operator2::Add, Box::new(node), Box::new(right))
-            } else if self.consume("-") {
+            } else if self.consume_reserve("-") {
                 let right = self.mul()?;
                 node = Node::new_op2(Operator2::Sub, Box::new(node), Box::new(right))
             } else {
@@ -126,16 +132,16 @@ impl TokenStream {
         let mut node = self.add()?;
 
         loop {
-            if self.consume("<") {
+            if self.consume_reserve("<") {
                 let right = self.add()?;
                 node = Node::new_op2(Operator2::Lt, Box::new(node), Box::new(right))
-            } else if self.consume("<=") {
+            } else if self.consume_reserve("<=") {
                 let right = self.add()?;
                 node = Node::new_op2(Operator2::Lte, Box::new(node), Box::new(right))
-            } else if self.consume(">") {
+            } else if self.consume_reserve(">") {
                 let right = self.add()?;
                 node = Node::new_op2(Operator2::Lt, Box::new(right), Box::new(node))
-            } else if self.consume(">=") {
+            } else if self.consume_reserve(">=") {
                 let right = self.add()?;
                 node = Node::new_op2(Operator2::Lte, Box::new(right), Box::new(node))
             } else {
@@ -150,10 +156,10 @@ impl TokenStream {
         let mut node = self.relational()?;
 
         loop {
-            if self.consume("==") {
+            if self.consume_reserve("==") {
                 let right = self.relational()?;
                 node = Node::new_op2(Operator2::Eq, Box::new(node), Box::new(right))
-            } else if self.consume("!=") {
+            } else if self.consume_reserve("!=") {
                 let right = self.relational()?;
                 node = Node::new_op2(Operator2::Eq, Box::new(node), Box::new(right))
             } else {
@@ -164,11 +170,45 @@ impl TokenStream {
         Ok(node)
     }
 
-    pub fn expr(&mut self) -> ParseResult<Node> {
-        self.equality()
+    pub fn assign(&mut self) -> ParseResult<Node> {
+        let mut node = self.equality()?;
+        if self.consume_reserve("=") {
+            node = Node::new_assign(Box::new(node), Box::new(self.equality()?));
+        }
+        Ok(node)
     }
 
-    pub fn consume(&mut self, op: &str) -> bool {
+    pub fn expr(&mut self) -> ParseResult<Node> {
+        self.assign()
+    }
+
+    pub fn statement(&mut self) -> ParseResult<Node> {
+        let node = self.expr()?;
+        self.expect(";")?;
+        Ok(node)
+    }
+
+    pub fn program(&mut self) -> ParseResult<Vec<Node>> {
+        let mut lines = vec![];
+        while !self.at_eof() {
+            lines.push(self.statement()?);
+        }
+
+        Ok(lines)
+    }
+
+    pub fn consume_ident(&mut self) -> Option<String> {
+        match self.inner.peek().unwrap() {
+            Token::Ident(n) => {
+                let n = n.clone();
+                self.inner.next().unwrap();
+                Some(n)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn consume_reserve(&mut self, op: &str) -> bool {
         match self.inner.peek().unwrap() {
             Token::Reserved(s) if s.as_str() == op => {
                 self.inner.next().unwrap();
@@ -224,18 +264,52 @@ pub enum Operator2 {
 }
 
 #[derive(Debug)]
+pub struct LocalValue {
+    name: String,
+    offset: usize,
+}
+
+impl LocalValue {
+    pub fn new(name: String, offset: usize) -> Self {
+        Self { name, offset }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+}
+
+#[derive(Debug)]
 pub enum Node {
     Operator2 {
         op: Operator2,
         left: Box<Self>,
         right: Box<Self>,
     },
+    Assign {
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    LocalValue(LocalValue),
     Num(i64),
 }
 
 impl Node {
     pub fn new_op2(op: Operator2, left: Box<Self>, right: Box<Self>) -> Self {
         Self::Operator2 { op, left, right }
+    }
+
+    pub fn new_assign(left: Box<Self>, right: Box<Self>) -> Self {
+        Self::Assign { left, right }
+    }
+
+    pub fn as_local_value(&self) -> Option<&LocalValue> {
+        match self {
+            Self::LocalValue(s) => Some(s),
+            _ => None,
+        }
     }
 }
 
@@ -333,12 +407,21 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, ")") {
             tokens.push(Token::Reserved(")".to_string()));
             cs.next();
+        } else if match_string(&cs, ";") {
+            tokens.push(Token::Reserved(";".to_string()));
+            cs.next();
+        } else if match_string(&cs, "=") {
+            tokens.push(Token::Reserved("=".to_string()));
+            cs.next();
         } else {
             match c {
                 ' ' => {
                     cs.next();
                 }
-
+                c if 'a' <= c && c <= 'z' => {
+                    tokens.push(Token::Ident(c.to_string()));
+                    cs.next();
+                }
                 c if c.is_ascii_digit() => {
                     let num = parse_number(&mut cs)
                         .map_err(|e| TokenizeError::new(e.message, 0, input.to_string(), pos))?;

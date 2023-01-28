@@ -18,24 +18,25 @@ assert() {
   fi
 }
 
-assert 0 0 01
-assert 42 42 01
-assert 21 "5+20-4" 02
-assert 41 " 12 + 34 - 5 " 03
-assert 0 " 1 + -1 " 03
-assert 51 " 12 + 34 - -5  " 03
-assert 41 " 12 + 34 - +5  " 03
-assert 2 "1++1" 03
-assert 0 "1+-1" 03
-assert 1 "1 == 1" 03
-assert 1 "1 <= 1" 03
-assert 1 "1 >= 1" 03
-assert 0 "1 == 2" 03
-assert 1 "1 < 2" 03
-assert 1 "1 <= 2" 03
-assert 0 "1 > 2" 03
-assert 0 "1 >= 2" 03
-assert 0 "1 > 2" 03
-assert 0 "1 >= 2" 03
+assert 0 "0;" 01
+assert 42 "42;" 01
+assert 21 "5+20-4;" 02
+assert 41 " 12 + 34 - 5 ;" 03
+assert 0 " 1 + -1 ;" 03
+assert 51 " 12 + 34 - -5  ;" 03
+assert 41 " 12 + 34 - +5  ;" 03
+assert 2 "1++1;" 03
+assert 0 "1+-1;" 03
+assert 1 "1 == 1;" 03
+assert 1 "1 <= 1;" 03
+assert 1 "1 >= 1;" 03
+assert 0 "1 == 2;" 03
+assert 1 "1 < 2;" 03
+assert 1 "1 <= 2;" 03
+assert 0 "1 > 2;" 03
+assert 0 "1 >= 2;" 03
+assert 0 "1 > 2;" 03
+assert 0 "1 >= 2;" 03
+assert 22 "a=1+1;a+20;"
 
 echo OK

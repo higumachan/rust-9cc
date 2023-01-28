@@ -2,16 +2,9 @@ mod generator;
 mod parser;
 
 use crate::generator::Generator;
+use crate::parser::tokenize;
 use crate::parser::TokenStream;
-use crate::parser::{tokenize};
 use std::env::args;
-
-
-
-
-
-
-
 
 fn main() {
     let argv: Vec<_> = args().collect();
@@ -21,15 +14,24 @@ fn main() {
     let tokens = tokenize(p).unwrap();
 
     let mut token_stream = TokenStream::new(tokens);
-    let node = token_stream.expr().unwrap();
+    let code = token_stream.program().unwrap();
     let generator = Generator::new();
 
     println!(".intel_syntax noprefix");
     println!(".globl main");
     println!("main:");
 
-    generator.gen(&node);
+    println!("  push rbp");
+    println!("  mov rbp, rsp");
+    println!("  sub rbp, {}", 8 * 26);
 
-    println!("  pop rax");
+    for line in &code {
+        dbg!(line);
+        generator.gen(&line).unwrap();
+        println!("  pop rax");
+    }
+
+    // println!("  mov rsp, rbp");
+    println!("  pop rbp");
     println!("  ret");
 }
