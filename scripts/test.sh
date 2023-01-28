@@ -18,7 +18,9 @@ assert() {
   fi
 }
 
-assert 22 "foo=1;bar=2;return foo+bar;"
+assert 10 "return 10; return 5; return 1 + 1;"
+assert 3 "foo=1;bar=2;return foo+bar;"
+assert 3 "foo=1;bar=2;foo+bar;"
 assert 0 "0;" 01
 assert 42 "42;" 01
 assert 21 "5+20-4;" 02

@@ -10,6 +10,7 @@ pub enum Token {
     Reserved(String),
     Ident(String),
     Num(i64),
+    Return,
     Eof,
 }
 
@@ -199,9 +200,16 @@ impl TokenStream {
     }
 
     pub fn statement(&mut self) -> ParseResult<Node> {
+        let is_return = self.consume_return();
+
         let node = self.expr()?;
         self.expect(";")?;
-        Ok(node)
+
+        if is_return {
+            Ok(Node::Return(node.into()))
+        } else {
+            Ok(node)
+        }
     }
 
     pub fn program(&mut self) -> ParseResult<Vec<Node>> {
@@ -221,6 +229,16 @@ impl TokenStream {
                 Some(n)
             }
             _ => None,
+        }
+    }
+
+    fn consume_return(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::Return => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
         }
     }
 
@@ -308,6 +326,7 @@ pub enum Node {
         left: Box<Self>,
         right: Box<Self>,
     },
+    Return(Box<Self>),
     LocalVariable(LocalVariable),
     Num(i64),
 }
@@ -449,6 +468,11 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, "=") {
             tokens.push(Token::Reserved("=".to_string()));
             cs.next();
+        } else if match_string(&cs, "return") {
+            tokens.push(Token::Return);
+            for _ in 0..6 {
+                cs.next();
+            }
         } else if let Some(name) = match_variable_string(&mut cs) {
             let n = name.len();
             tokens.push(Token::Ident(name));

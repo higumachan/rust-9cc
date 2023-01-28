@@ -90,6 +90,13 @@ impl Generator {
 
                 println!("  push rax");
             }
+            Node::Return(val) => {
+                self.gen(val)?;
+                println!("  pop rax");
+                println!("  mov rsp, rbp");
+                println!("  pop rbp");
+                println!("  ret");
+            }
         }
 
         Ok(())
