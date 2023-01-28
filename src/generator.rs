@@ -1,7 +1,9 @@
 use crate::parser::{LocalVariable, Node, Operator2};
 use std::collections::HashMap;
 
-pub struct Generator {}
+pub struct Generator {
+    next_cond_label: usize,
+}
 
 #[derive(Debug)]
 pub enum GenerateError {
@@ -12,10 +14,16 @@ type GenerateResult = Result<(), GenerateError>;
 
 impl Generator {
     pub fn new() -> Self {
-        Self {}
+        Self { next_cond_label: 0 }
     }
 
-    pub fn gen_lval(&self, node: &Node) -> GenerateResult {
+    fn assign_next_cond_label(&mut self) -> usize {
+        let r = self.next_cond_label;
+        self.next_cond_label += 1;
+        r
+    }
+
+    pub fn gen_lval(&mut self, node: &Node) -> GenerateResult {
         let local_value = node.as_local_value().ok_or(GenerateError::NotLeftValue)?;
 
         println!("  mov rax, rbp");
@@ -25,7 +33,7 @@ impl Generator {
         Ok(())
     }
 
-    pub fn gen(&self, node: &Node) -> GenerateResult {
+    pub fn gen(&mut self, node: &Node) -> GenerateResult {
         match node {
             Node::Num(n) => {
                 println!("  push {}", n);
@@ -96,6 +104,21 @@ impl Generator {
                 println!("  mov rsp, rbp");
                 println!("  pop rbp");
                 println!("  ret");
+            }
+
+            Node::IfElse(if_and_else) => {
+                let if_label = self.assign_next_cond_label();
+                self.gen(if_and_else.condition().as_ref())?;
+                println!("  pop rax");
+                println!("  cmp rax, 0");
+                println!("  je .Lelse{}", if_label);
+                self.gen(if_and_else.then_statement())?;
+                println!("  jmp .Lend{}", if_label);
+                println!(".Lelse{}:", if_label);
+                if let Some(else_statement) = if_and_else.else_statement() {
+                    self.gen(else_statement.as_ref())?;
+                }
+                println!(".Lend{}:", if_label);
             }
         }
 

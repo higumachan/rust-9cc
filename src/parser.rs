@@ -11,6 +11,8 @@ pub enum Token {
     Ident(String),
     Num(i64),
     Return,
+    If,
+    Else,
     Eof,
 }
 
@@ -200,15 +202,33 @@ impl TokenStream {
     }
 
     pub fn statement(&mut self) -> ParseResult<Node> {
-        let is_return = self.consume_return();
-
-        let node = self.expr()?;
-        self.expect(";")?;
-
-        if is_return {
-            Ok(Node::Return(node.into()))
+        if self.consume_if() {
+            self.expect("(")?;
+            let cond = self.expr()?;
+            self.expect(")")?;
+            let then_statement = self.statement()?;
+            let else_statement = if self.consume_else() {
+                let else_statement = self.statement()?;
+                Some(else_statement)
+            } else {
+                None
+            };
+            Ok(Node::IfElse(IfElse::new(
+                cond.into(),
+                then_statement.into(),
+                else_statement.map(Box::new),
+            )))
         } else {
-            Ok(node)
+            let is_return = self.consume_return();
+
+            let node = self.expr()?;
+            self.expect(";")?;
+
+            if is_return {
+                Ok(Node::Return(node.into()))
+            } else {
+                Ok(node)
+            }
         }
     }
 
@@ -229,6 +249,26 @@ impl TokenStream {
                 Some(n)
             }
             _ => None,
+        }
+    }
+
+    fn consume_if(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::If => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn consume_else(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::Else => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
         }
     }
 
@@ -316,6 +356,36 @@ impl LocalVariable {
 }
 
 #[derive(Debug)]
+pub struct IfElse {
+    condition: Box<Node>,
+    then_statement: Box<Node>,
+    else_statement: Option<Box<Node>>,
+}
+
+impl IfElse {
+    pub fn new(
+        condition: Box<Node>,
+        then_statement: Box<Node>,
+        else_statement: Option<Box<Node>>,
+    ) -> Self {
+        Self {
+            condition,
+            then_statement,
+            else_statement,
+        }
+    }
+    pub fn condition(&self) -> &Box<Node> {
+        &self.condition
+    }
+    pub fn then_statement(&self) -> &Box<Node> {
+        &self.then_statement
+    }
+    pub fn else_statement(&self) -> &Option<Box<Node>> {
+        &self.else_statement
+    }
+}
+
+#[derive(Debug)]
 pub enum Node {
     Operator2 {
         op: Operator2,
@@ -326,6 +396,7 @@ pub enum Node {
         left: Box<Self>,
         right: Box<Self>,
     },
+    IfElse(IfElse),
     Return(Box<Self>),
     LocalVariable(LocalVariable),
     Num(i64),
@@ -471,6 +542,16 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, "return") {
             tokens.push(Token::Return);
             for _ in 0..6 {
+                cs.next();
+            }
+        } else if match_string(&cs, "if") {
+            tokens.push(Token::If);
+            for _ in 0..2 {
+                cs.next();
+            }
+        } else if match_string(&cs, "else") {
+            tokens.push(Token::Else);
+            for _ in 0..4 {
                 cs.next();
             }
         } else if let Some(name) = match_variable_string(&mut cs) {

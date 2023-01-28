@@ -18,6 +18,10 @@ assert() {
   fi
 }
 
+assert 10 "foo = 1; bar = 0; if (foo == 1)  bar = 10; return bar;"
+assert 0 "foo = 0; bar = 0; if (foo == 1)  bar = 10; return bar;"
+assert 20 "foo = 0; if (foo == 1)  return 10;  else  return 20; "
+assert 10 "foo = 1; if (foo == 1)  return 10;  else  return 20; "
 assert 10 "return 10; return 5; return 1 + 1;"
 assert 3 "foo=1;bar=2;return foo+bar;"
 assert 3 "foo=1;bar=2;foo+bar;"
