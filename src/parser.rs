@@ -45,7 +45,7 @@ pub enum ParseError {
 }
 
 impl Display for ParseError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
@@ -205,7 +205,7 @@ pub fn parse_number(
 ) -> Result<i64, GeneralError> {
     let mut s = String::new();
 
-    while let Some((pos, c)) = iter.next_if(|(pos, c)| c.is_ascii_digit()) {
+    while let Some((_pos, c)) = iter.next_if(|(_pos, c)| c.is_ascii_digit()) {
         s.push(c);
     }
     i64::from_str(s.as_str()).map_err(|_| GeneralError::new("整数がパースできません".to_string()))
@@ -251,7 +251,7 @@ impl GeneralError {
 }
 
 impl Display for GeneralError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }
@@ -278,7 +278,7 @@ impl TokenizeError {
 }
 
 impl Display for TokenizeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         todo!()
     }
 }

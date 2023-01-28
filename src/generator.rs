@@ -1,6 +1,6 @@
 use crate::parser::{Node, Operator2};
 
-pub fn gen(node: &Node) {}
+pub fn gen(_node: &Node) {}
 
 pub struct Generator {}
 
