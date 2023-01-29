@@ -28,6 +28,8 @@ assert() {
   fi
 }
 
+assert 7 "hoge(a, b, c) { return a + b * c; } main() { return hoge(1, 2, 3); }"
+assert 30 "hoge(a, b) { return a + b; } main() { return hoge(10, 20); }"
 assert 2 "main() { return 1 + 1; }"
 assert 0 "main() {zig(1, 3); return 0; }" "1 3"
 assert 0 "main() {bar(1, 3); return 0; }" "4"
@@ -52,6 +54,8 @@ assert 51 "main() { 12 + 34 - -5  ; }"
 assert 41 "main() { 12 + 34 - +5  ; }"
 assert 2 "main() {1++1; }"
 assert 0 "main() {1+-1; }"
+assert 5 "main() { return 10 / 2; }"
+assert 2 "main() { return 1 * 2; }"
 assert 1 "main() {1 == 1; }"
 assert 1 "main() {1 <= 1; }"
 assert 1 "main() {1 >= 1; }"

@@ -15,7 +15,7 @@ impl LocalVariableAssigner {
     }
 
     fn clear(&mut self) {
-        self.next_offset = 0;
+        self.next_offset = INTEGER_SIZE;
         self.local_variables.clear();
     }
 
@@ -210,7 +210,7 @@ impl Generator {
                     println!("  pop {}", register);
                 }
                 println!("  call {}", call_function.name());
-                println!("  pop rax");
+                println!("  push rax");
             }
             Node::DefineFunction(define_function) => {
                 self.local_variable_assigner.clear();
