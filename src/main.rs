@@ -20,18 +20,8 @@ fn main() {
 
     println!(".intel_syntax noprefix");
     println!(".globl main");
-    println!("main:");
-
-    println!("  push rbp");
-    println!("  mov rbp, rsp");
-    println!("  sub rsp, {}", 8 * 26);
 
     for line in &code {
         generator.gen(&line).unwrap();
-        println!("  pop rax");
     }
-
-    println!("  mov rsp, rbp");
-    println!("  pop rbp");
-    println!("  ret");
 }

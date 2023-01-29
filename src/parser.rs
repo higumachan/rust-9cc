@@ -10,6 +10,7 @@ use std::vec::IntoIter;
 pub enum ParseError {
     ExpectReserved(String),
     ExpectNumber,
+    ExpectFunctionDefine,
 }
 
 impl Display for ParseError {
@@ -18,14 +19,13 @@ impl Display for ParseError {
     }
 }
 
-const INTEGER_SIZE: usize = 8;
+pub const INTEGER_SIZE: usize = 8;
 
 pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 pub struct TokenStream {
     inner: Peekable<IntoIter<Token>>,
     local_variables: HashMap<String, LocalVariable>,
-    next_offset: usize,
 }
 
 impl TokenStream {
@@ -33,7 +33,6 @@ impl TokenStream {
         Self {
             inner: tokens.into_iter().peekable(),
             local_variables: HashMap::new(),
-            next_offset: INTEGER_SIZE,
         }
     }
 
@@ -56,14 +55,11 @@ impl TokenStream {
                 }
                 Ok(Node::CallFunction(CallFunction::new(ident_name, args)))
             } else {
-                let next_offset = &mut self.next_offset;
                 let lv = self
                     .local_variables
                     .entry(ident_name.clone())
                     .or_insert_with(move || {
-                        let local_variable =
-                            LocalVariable::new(ident_name.to_string(), *next_offset);
-                        *next_offset += INTEGER_SIZE;
+                        let local_variable = LocalVariable::new(ident_name.to_string());
 
                         local_variable
                     })
@@ -259,13 +255,44 @@ impl TokenStream {
         }
     }
 
+    fn param_list(&mut self) -> ParseResult<Vec<String>> {
+        let mut params = vec![];
+        self.expect("(")?;
+        if !self.consume_reserve(")") {
+            params.push(self.consume_ident().unwrap());
+            while !self.consume_reserve(")") {
+                self.expect(",")?;
+                params.push(self.consume_ident().unwrap());
+            }
+        }
+        Ok(params)
+    }
+
+    pub fn expect_function(&mut self) -> ParseResult<Node> {
+        if let Some(name) = self.consume_ident() {
+            let params = self.param_list()?;
+            self.expect("{")?;
+            let mut statements = vec![];
+            while !self.consume_reserve("}") {
+                statements.push(self.statement()?);
+            }
+
+            Ok(Node::DefineFunction(DefineFunction::new(
+                name, params, statements,
+            )))
+        } else {
+            Err(ParseError::ExpectFunctionDefine)
+        }
+    }
+
     pub fn program(&mut self) -> ParseResult<Vec<Node>> {
-        let mut lines = vec![];
+        let mut define_functions = vec![];
+
         while !self.at_eof() {
-            lines.push(self.statement()?);
+            define_functions.push(self.expect_function()?);
         }
 
-        Ok(lines)
+        Ok(define_functions)
     }
 
     pub fn consume_ident(&mut self) -> Option<String> {
@@ -376,18 +403,14 @@ pub enum Operator2 {
 #[derive(Debug, Clone)]
 pub struct LocalVariable {
     name: String,
-    offset: usize,
 }
 
 impl LocalVariable {
-    pub fn new(name: String, offset: usize) -> Self {
-        Self { name, offset }
+    pub fn new(name: String) -> Self {
+        Self { name }
     }
     pub fn name(&self) -> &str {
         &self.name
-    }
-    pub fn offset(&self) -> usize {
-        self.offset
     }
 }
 
@@ -476,6 +499,32 @@ impl CallFunction {
 }
 
 #[derive(Debug)]
+pub struct DefineFunction {
+    name: String,
+    params: Vec<String>,
+    statements: Vec<Node>,
+}
+
+impl DefineFunction {
+    pub fn new(name: String, params: Vec<String>, statements: Vec<Node>) -> Self {
+        Self {
+            name,
+            params,
+            statements,
+        }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn params(&self) -> &Vec<String> {
+        &self.params
+    }
+    pub fn statements(&self) -> &Vec<Node> {
+        &self.statements
+    }
+}
+
+#[derive(Debug)]
 pub enum Node {
     Operator2 {
         op: Operator2,
@@ -487,6 +536,7 @@ pub enum Node {
         right: Box<Self>,
     },
     CallFunction(CallFunction),
+    DefineFunction(DefineFunction),
     IfElse(IfElse),
     For(For),
     Return(Box<Self>),

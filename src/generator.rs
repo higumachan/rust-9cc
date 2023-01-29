@@ -1,20 +1,70 @@
-use crate::parser::{Node, Operator2};
+use crate::parser::{Node, Operator2, INTEGER_SIZE};
+use std::collections::HashMap;
+
+struct LocalVariableAssigner {
+    local_variables: HashMap<String, usize>,
+    next_offset: usize,
+}
+
+impl LocalVariableAssigner {
+    pub fn new() -> Self {
+        Self {
+            local_variables: HashMap::new(),
+            next_offset: INTEGER_SIZE,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.next_offset = 0;
+        self.local_variables.clear();
+    }
+
+    pub fn assign_local_variable(&mut self, variable_name: &str) -> Option<usize> {
+        if !self.local_variables.contains_key(variable_name) {
+            let ret = self.next_offset;
+            self.local_variables
+                .insert(variable_name.to_string(), self.next_offset);
+            self.next_offset += INTEGER_SIZE;
+            Some(ret)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_or_assign_local_variable(&mut self, variable_name: &str) -> usize {
+        *self
+            .local_variables
+            .entry(variable_name.to_string())
+            .or_insert_with(|| {
+                let ret = self.next_offset;
+                self.next_offset += INTEGER_SIZE;
+                ret
+            })
+    }
+}
 
 pub struct Generator {
     next_label: usize,
+    local_variable_assigner: LocalVariableAssigner,
 }
 
 #[derive(Debug)]
 pub enum GenerateError {
     NotLeftValue,
     CallArgsOverFlow,
+    DuplicatedVariable,
 }
 
 type GenerateResult = Result<(), GenerateError>;
 
+const REGISTERS: [&'static str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
 impl Generator {
     pub fn new() -> Self {
-        Self { next_label: 0 }
+        Self {
+            next_label: 0,
+            local_variable_assigner: LocalVariableAssigner::new(),
+        }
     }
 
     fn assign_next_label(&mut self) -> usize {
@@ -25,9 +75,12 @@ impl Generator {
 
     pub fn gen_lval(&mut self, node: &Node) -> GenerateResult {
         let local_value = node.as_local_value().ok_or(GenerateError::NotLeftValue)?;
+        let offset = self
+            .local_variable_assigner
+            .get_or_assign_local_variable(local_value.name());
 
         println!("  mov rax, rbp");
-        println!("  sub rax, {}", local_value.offset());
+        println!("  sub rax, {}", offset);
         println!("  push rax");
 
         Ok(())
@@ -150,15 +203,37 @@ impl Generator {
                 if call_function.args().len() > 6 {
                     return Err(GenerateError::CallArgsOverFlow);
                 }
-                let registers = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
                 for arg in call_function.args().iter().rev() {
                     self.gen(arg)?;
                 }
-                for (_, register) in call_function.args().iter().zip(registers) {
+                for (_, register) in call_function.args().iter().zip(REGISTERS) {
                     println!("  pop {}", register);
                 }
                 println!("  call {}", call_function.name());
                 println!("  pop rax");
+            }
+            Node::DefineFunction(define_function) => {
+                self.local_variable_assigner.clear();
+                println!("{}:", define_function.name());
+                println!("  push rbp");
+                println!("  mov rbp, rsp");
+                for (register, param) in REGISTERS.iter().zip(define_function.params().iter()) {
+                    println!("  push {}", register);
+                    let _ = self
+                        .local_variable_assigner
+                        .assign_local_variable(param.as_str())
+                        .ok_or(GenerateError::DuplicatedVariable)?;
+                }
+                println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する
+
+                for statement in define_function.statements() {
+                    self.gen(&statement).unwrap();
+                    println!("  pop rax");
+                }
+
+                println!("  mov rsp, rbp");
+                println!("  pop rbp");
+                println!("  ret");
             }
         }
 
