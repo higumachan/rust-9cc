@@ -28,11 +28,12 @@ assert() {
   fi
 }
 
+assert 10 "main() { int a; a = 10; return a; }"
 assert 20 "main() { a = 10; b = &a; *b = 20; return a; }"
-assert 55 "fib(n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } main() { return fib(10); }"
-assert 8 "fib(n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } main() { return fib(6); }"
-assert 7 "hoge(a, b, c) { return a + b * c; } main() { return hoge(1, 2, 3); }"
-assert 30 "hoge(a, b) { return a + b; } main() { return hoge(10, 20); }"
+assert 55 "fib(int n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } main() { return fib(10); }"
+assert 8 "fib(int n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } main() { return fib(6); }"
+assert 7 "hoge(int a, int b, int c) { return a + b * c; } main() { return hoge(1, 2, 3); }"
+assert 30 "hoge(int a, int b) { return a + b; } main() { return hoge(10, 20); }"
 assert 2 "main() { return 1 + 1; }"
 assert 0 "main() {zig(1, 3); return 0; }" "1 3"
 assert 0 "main() {bar(1, 3); return 0; }" "4"
@@ -70,6 +71,5 @@ assert 0 "main() {1 >= 2; }"
 assert 0 "main() {1 > 2; }"
 assert 0 "main() {1 >= 2; }"
 assert 22 "main() {a=1+1;a+20; }"
-
 
 echo OK

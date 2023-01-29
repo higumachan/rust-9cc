@@ -106,6 +106,13 @@ impl Generator {
                 println!("  mov rax, [rax]");
                 println!("  push rax");
             }
+            Node::DefineVariable(name) => {
+                let _ = self
+                    .local_variable_assigner
+                    .assign_local_variable(name.as_str())
+                    .ok_or(GenerateError::DuplicatedVariable);
+                println!("  sub rsp, {}", INTEGER_SIZE);
+            }
             Node::Assign { left, right } => {
                 self.gen_lval(left.as_ref())?;
                 self.gen(right.as_ref())?;
@@ -233,7 +240,7 @@ impl Generator {
                         .assign_local_variable(param.as_str())
                         .ok_or(GenerateError::DuplicatedVariable)?;
                 }
-                println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する
+                println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する. 変数定義があるのでもうすでに必要ないが,互換性のために残している.
 
                 for statement in define_function.statements() {
                     self.gen(&statement)?;

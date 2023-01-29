@@ -13,6 +13,7 @@ pub enum Token {
     Else,
     For,
     While,
+    Int,
     Eof,
 }
 
@@ -204,6 +205,11 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, "while") {
             tokens.push(Token::While);
             for _ in 0..5 {
+                cs.next();
+            }
+        } else if match_string(&cs, "int") {
+            tokens.push(Token::Int);
+            for _ in 0..3 {
                 cs.next();
             }
         } else if let Some(name) = match_variable_string(&mut cs) {

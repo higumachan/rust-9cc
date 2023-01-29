@@ -11,6 +11,8 @@ pub enum ParseError {
     ExpectReserved(String),
     ExpectNumber,
     ExpectFunctionDefine,
+    ExpectInt,
+    ExpectIdent,
 }
 
 impl Display for ParseError {
@@ -185,6 +187,10 @@ impl TokenStream {
                 statements.push(self.statement()?);
             }
             Ok(Node::Block(statements))
+        } else if self.consume_int() {
+            let ident = self.expect_ident()?;
+            self.expect(";")?;
+            Ok(Node::DefineVariable(ident))
         } else if self.consume_if() {
             self.expect("(")?;
             let cond = self.expr()?;
@@ -263,9 +269,11 @@ impl TokenStream {
         let mut params = vec![];
         self.expect("(")?;
         if !self.consume_reserve(")") {
+            self.expect_int()?;
             params.push(self.consume_ident().unwrap());
             while !self.consume_reserve(")") {
                 self.expect(",")?;
+                self.expect_int()?;
                 params.push(self.consume_ident().unwrap());
             }
         }
@@ -289,6 +297,26 @@ impl TokenStream {
         }
     }
 
+    fn consume_int(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::Int => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn expect_int(&mut self) -> ParseResult<()> {
+        match self.inner.peek().unwrap() {
+            Token::Int => {
+                self.inner.next().unwrap();
+                Ok(())
+            }
+            _ => Err(ParseError::ExpectInt),
+        }
+    }
+
     pub fn program(&mut self) -> ParseResult<Vec<Node>> {
         let mut define_functions = vec![];
 
@@ -299,7 +327,7 @@ impl TokenStream {
         Ok(define_functions)
     }
 
-    pub fn consume_ident(&mut self) -> Option<String> {
+    fn consume_ident(&mut self) -> Option<String> {
         match self.inner.peek().unwrap() {
             Token::Ident(n) => {
                 let n = n.clone();
@@ -307,6 +335,17 @@ impl TokenStream {
                 Some(n)
             }
             _ => None,
+        }
+    }
+
+    fn expect_ident(&mut self) -> ParseResult<String> {
+        match self.inner.peek().unwrap() {
+            Token::Ident(n) => {
+                let n = n.clone();
+                self.inner.next().unwrap();
+                Ok(n)
+            }
+            _ => Err(ParseError::ExpectIdent),
         }
     }
 
@@ -549,6 +588,7 @@ pub enum Node {
     LocalVariable(LocalVariable),
     Num(i64),
     Block(Vec<Node>),
+    DefineVariable(String),
 }
 
 impl Node {
