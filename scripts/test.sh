@@ -28,6 +28,8 @@ assert() {
   fi
 }
 
+assert 55 "fib(n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } main() { return fib(10); }"
+assert 8 "fib(n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } main() { return fib(6); }"
 assert 7 "hoge(a, b, c) { return a + b * c; } main() { return hoge(1, 2, 3); }"
 assert 30 "hoge(a, b) { return a + b; } main() { return hoge(10, 20); }"
 assert 2 "main() { return 1 + 1; }"
