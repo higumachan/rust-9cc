@@ -178,6 +178,9 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, ",") {
             tokens.push(Token::Reserved(",".to_string()));
             cs.next();
+        } else if match_string(&cs, "&") {
+            tokens.push(Token::Reserved("&".to_string()));
+            cs.next();
         } else if match_string(&cs, "return") {
             tokens.push(Token::Return);
             for _ in 0..6 {

@@ -74,14 +74,23 @@ impl Generator {
     }
 
     pub fn gen_lval(&mut self, node: &Node) -> GenerateResult {
-        let local_value = node.as_local_value().ok_or(GenerateError::NotLeftValue)?;
-        let offset = self
-            .local_variable_assigner
-            .get_or_assign_local_variable(local_value.name());
+        match node {
+            Node::Deref(val) => {
+                self.gen(val)?;
+            }
+            Node::LocalVariable(var) => {
+                let offset = self
+                    .local_variable_assigner
+                    .get_or_assign_local_variable(var.name());
 
-        println!("  mov rax, rbp");
-        println!("  sub rax, {}", offset);
-        println!("  push rax");
+                println!("  mov rax, rbp");
+                println!("  sub rax, {}", offset);
+                println!("  push rax");
+            }
+            _ => {
+                return Err(GenerateError::NotLeftValue);
+            }
+        }
 
         Ok(())
     }
@@ -227,13 +236,22 @@ impl Generator {
                 println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する
 
                 for statement in define_function.statements() {
-                    self.gen(&statement).unwrap();
+                    self.gen(&statement)?;
                     println!("  pop rax");
                 }
 
                 println!("  mov rsp, rbp");
                 println!("  pop rbp");
                 println!("  ret");
+            }
+            Node::Addr(val) => {
+                self.gen_lval(val.as_ref())?;
+            }
+            Node::Deref(val) => {
+                self.gen(val.as_ref())?;
+                println!("  pop rax");
+                println!("  mov rax [rax]");
+                println!("  push rax");
             }
         }
 

@@ -81,6 +81,10 @@ impl TokenStream {
                 Box::new(Node::Num(0)),
                 Box::new(self.primary()?),
             ))
+        } else if self.consume_reserve("*") {
+            Ok(Node::Deref(self.unary()?.into()))
+        } else if self.consume_reserve("&") {
+            Ok(Node::Addr(self.unary()?.into()))
         } else {
             self.primary()
         }
@@ -535,6 +539,8 @@ pub enum Node {
         left: Box<Self>,
         right: Box<Self>,
     },
+    Addr(Box<Self>),
+    Deref(Box<Self>),
     CallFunction(CallFunction),
     DefineFunction(DefineFunction),
     IfElse(IfElse),
