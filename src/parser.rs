@@ -280,21 +280,20 @@ impl TokenStream {
         Ok(params)
     }
 
-    pub fn expect_function(&mut self) -> ParseResult<Node> {
-        if let Some(name) = self.consume_ident() {
-            let params = self.param_list()?;
-            self.expect("{")?;
-            let mut statements = vec![];
-            while !self.consume_reserve("}") {
-                statements.push(self.statement()?);
-            }
+    pub fn expect_define_function(&mut self) -> ParseResult<Node> {
+        self.expect_int()?;
+        let name = self.expect_ident()?;
 
-            Ok(Node::DefineFunction(DefineFunction::new(
-                name, params, statements,
-            )))
-        } else {
-            Err(ParseError::ExpectFunctionDefine)
+        let params = self.param_list()?;
+        self.expect("{")?;
+        let mut statements = vec![];
+        while !self.consume_reserve("}") {
+            statements.push(self.statement()?);
         }
+
+        Ok(Node::DefineFunction(DefineFunction::new(
+            name, params, statements,
+        )))
     }
 
     fn consume_int(&mut self) -> bool {
@@ -321,7 +320,7 @@ impl TokenStream {
         let mut define_functions = vec![];
 
         while !self.at_eof() {
-            define_functions.push(self.expect_function()?);
+            define_functions.push(self.expect_define_function()?);
         }
 
         Ok(define_functions)
