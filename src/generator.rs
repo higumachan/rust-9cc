@@ -32,15 +32,8 @@ impl LocalVariableAssigner {
         }
     }
 
-    pub fn get_or_assign_local_variable(&mut self, variable_name: &str) -> usize {
-        *self
-            .local_variables
-            .entry(variable_name.to_string())
-            .or_insert_with(|| {
-                let ret = self.next_offset;
-                self.next_offset += INTEGER_SIZE;
-                ret
-            })
+    pub fn get_local_variable(&mut self, variable_name: &str) -> Option<usize> {
+        self.local_variables.get(variable_name).copied()
     }
 }
 
@@ -54,6 +47,7 @@ pub enum GenerateError {
     NotLeftValue,
     CallArgsOverFlow,
     DuplicatedVariable,
+    UndefinedVariable(String),
 }
 
 type GenerateResult = Result<(), GenerateError>;
@@ -87,7 +81,8 @@ impl Generator {
                 // println!("  ; local variable: {}", var.name());
                 let offset = self
                     .local_variable_assigner
-                    .get_or_assign_local_variable(var.name());
+                    .get_local_variable(var.name())
+                    .ok_or_else(|| GenerateError::UndefinedVariable(var.name().to_string()))?;
 
                 println!("  mov rax, rbp");
                 println!("  sub rax, {}", offset);
@@ -113,11 +108,12 @@ impl Generator {
                 println!("  push rax");
             }
             Node::DefineVariable(dv) => {
-                let _ = self
+                let offset = self
                     .local_variable_assigner
                     .assign_local_variable(dv)
-                    .ok_or(GenerateError::DuplicatedVariable);
-                println!("  sub rsp, {}", INTEGER_SIZE);
+                    .ok_or(GenerateError::DuplicatedVariable)?;
+                println!("  sub rsp, {}", offset);
+                println!("  push rsp");
             }
             Node::Assign { left, right } => {
                 self.gen_lval(left.as_ref())?;
@@ -246,7 +242,7 @@ impl Generator {
                         .assign_local_variable(&(param.clone().into()))
                         .ok_or(GenerateError::DuplicatedVariable)?;
                 }
-                println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する. 変数定義があるのでもうすでに必要ないが,互換性のために残している.
+                // println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する. 変数定義があるのでもうすでに必要ないが,互換性のために残している.
 
                 for statement in define_function.statements() {
                     self.gen(&statement)?;
