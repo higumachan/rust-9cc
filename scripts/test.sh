@@ -28,6 +28,11 @@ assert() {
   fi
 }
 
+assert 100 "int f(int *a) { *a = 100; return 0; } int main() { int a; f(&a); return a; }"
+assert 20 "int main() { int a; int *b; int **c; a = 10; c = &b; *c = &a; *b = a + **c; return a; }"
+assert 10 "int main() { int a; int *b; int **c; a = 10; c = &b; *c = &a;  *b = 10; return a; }"
+assert 30 "int main() { int a; int *b; int **c; a = 10; b = &a; c = &b; **c = 30; return a; }"
+assert 20 "int main() { int a; int *b; a = 10; b = &a; *b = 20; return a; }"
 assert 10 "int main() { int a; a = 10; return a; }"
 assert 20 "int main() { a = 10; b = &a; *b = 20; return a; }"
 assert 55 "int fib(int n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } int main() { return fib(10); }"

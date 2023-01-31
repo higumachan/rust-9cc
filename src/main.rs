@@ -16,6 +16,9 @@ fn main() {
 
     let mut token_stream = TokenStream::new(tokens);
     let code = token_stream.program().unwrap();
+
+    dbg!(&code);
+
     let mut generator = Generator::new();
 
     println!(".intel_syntax noprefix");

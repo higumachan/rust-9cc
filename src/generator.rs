@@ -1,4 +1,4 @@
-use crate::parser::{Node, Operator2, INTEGER_SIZE};
+use crate::parser::{DefineVariable, Node, Operator2, Parameter, INTEGER_SIZE};
 use std::collections::HashMap;
 
 struct LocalVariableAssigner {
@@ -19,7 +19,8 @@ impl LocalVariableAssigner {
         self.local_variables.clear();
     }
 
-    pub fn assign_local_variable(&mut self, variable_name: &str) -> Option<usize> {
+    pub fn assign_local_variable(&mut self, variable: &DefineVariable) -> Option<usize> {
+        let variable_name = variable.name();
         if !self.local_variables.contains_key(variable_name) {
             let ret = self.next_offset;
             self.local_variables
@@ -76,9 +77,14 @@ impl Generator {
     pub fn gen_lval(&mut self, node: &Node) -> GenerateResult {
         match node {
             Node::Deref(val) => {
+                // println!("  ; deref gen_lval");
                 self.gen(val)?;
+                // println!("  pop rax");
+                // println!("  mov rax [rax]");
+                // println!("  push rax");
             }
             Node::LocalVariable(var) => {
+                // println!("  ; local variable: {}", var.name());
                 let offset = self
                     .local_variable_assigner
                     .get_or_assign_local_variable(var.name());
@@ -102,14 +108,14 @@ impl Generator {
             }
             Node::LocalVariable(_a) => {
                 self.gen_lval(node)?;
-                println!("  pop rax");
-                println!("  mov rax, [rax]");
+                println!("  pop rsi");
+                println!("  mov rax, [rsi]");
                 println!("  push rax");
             }
-            Node::DefineVariable(name) => {
+            Node::DefineVariable(dv) => {
                 let _ = self
                     .local_variable_assigner
-                    .assign_local_variable(name.as_str())
+                    .assign_local_variable(dv)
                     .ok_or(GenerateError::DuplicatedVariable);
                 println!("  sub rsp, {}", INTEGER_SIZE);
             }
@@ -237,7 +243,7 @@ impl Generator {
                     println!("  push {}", register);
                     let _ = self
                         .local_variable_assigner
-                        .assign_local_variable(param.as_str())
+                        .assign_local_variable(&(param.clone().into()))
                         .ok_or(GenerateError::DuplicatedVariable)?;
                 }
                 println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する. 変数定義があるのでもうすでに必要ないが,互換性のために残している.
@@ -255,9 +261,10 @@ impl Generator {
                 self.gen_lval(val.as_ref())?;
             }
             Node::Deref(val) => {
+                // println!("  ; deref gen");
                 self.gen(val.as_ref())?;
-                println!("  pop rax");
-                println!("  mov rax [rax]");
+                println!("  pop rsi");
+                println!("  mov rax, [rsi]");
                 println!("  push rax");
             }
         }

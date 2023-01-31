@@ -6,6 +6,24 @@ use std::iter::Peekable;
 
 use std::vec::IntoIter;
 
+#[derive(Debug, Clone)]
+pub struct Parameter {
+    name: String,
+    ty: Type,
+}
+
+impl Parameter {
+    pub fn new(name: String, ty: Type) -> Self {
+        Self { name, ty }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn ty(&self) -> &Type {
+        &self.ty
+    }
+}
+
 #[derive(Debug)]
 pub enum ParseError {
     ExpectReserved(String),
@@ -187,10 +205,10 @@ impl TokenStream {
                 statements.push(self.statement()?);
             }
             Ok(Node::Block(statements))
-        } else if self.consume_int() {
-            let ident = self.expect_ident()?;
+        } else if let Some(ty) = self.consume_type() {
+            let name = self.expect_ident()?;
             self.expect(";")?;
-            Ok(Node::DefineVariable(ident))
+            Ok(Node::DefineVariable(DefineVariable::new(name, ty)))
         } else if self.consume_if() {
             self.expect("(")?;
             let cond = self.expr()?;
@@ -265,16 +283,18 @@ impl TokenStream {
         }
     }
 
-    fn param_list(&mut self) -> ParseResult<Vec<String>> {
+    fn param_list(&mut self) -> ParseResult<Vec<Parameter>> {
         let mut params = vec![];
         self.expect("(")?;
         if !self.consume_reserve(")") {
-            self.expect_int()?;
-            params.push(self.consume_ident().unwrap());
+            let ty = self.expect_type()?;
+            let name = self.expect_ident()?;
+            params.push(Parameter::new(name, ty));
             while !self.consume_reserve(")") {
                 self.expect(",")?;
-                self.expect_int()?;
-                params.push(self.consume_ident().unwrap());
+                let ty = self.expect_type()?;
+                let name = self.expect_ident()?;
+                params.push(Parameter::new(name, ty));
             }
         }
         Ok(params)
@@ -303,6 +323,34 @@ impl TokenStream {
                 true
             }
             _ => false,
+        }
+    }
+
+    fn expect_type(&mut self) -> ParseResult<Type> {
+        self.expect_int()?;
+
+        let mut ty = Type::Int;
+
+        while self.consume_reserve("*") {
+            ty = Type::Ptr(Box::new(ty));
+        }
+
+        Ok(ty)
+    }
+
+    fn consume_type(&mut self) -> Option<Type> {
+        match self.inner.peek().unwrap() {
+            Token::Int => {
+                self.inner.next().unwrap();
+                let mut ty = Type::Int;
+
+                while self.consume_reserve("*") {
+                    ty = Type::Ptr(Box::new(ty));
+                }
+
+                Some(ty)
+            }
+            _ => None,
         }
     }
 
@@ -443,6 +491,12 @@ pub enum Operator2 {
 }
 
 #[derive(Debug, Clone)]
+pub enum Type {
+    Int,
+    Ptr(Box<Self>),
+}
+
+#[derive(Debug, Clone)]
 pub struct LocalVariable {
     name: String,
 }
@@ -543,12 +597,12 @@ impl CallFunction {
 #[derive(Debug)]
 pub struct DefineFunction {
     name: String,
-    params: Vec<String>,
+    params: Vec<Parameter>,
     statements: Vec<Node>,
 }
 
 impl DefineFunction {
-    pub fn new(name: String, params: Vec<String>, statements: Vec<Node>) -> Self {
+    pub fn new(name: String, params: Vec<Parameter>, statements: Vec<Node>) -> Self {
         Self {
             name,
             params,
@@ -558,11 +612,38 @@ impl DefineFunction {
     pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn params(&self) -> &Vec<String> {
+    pub fn params(&self) -> &Vec<Parameter> {
         &self.params
     }
     pub fn statements(&self) -> &Vec<Node> {
         &self.statements
+    }
+}
+
+#[derive(Debug)]
+pub struct DefineVariable {
+    name: String,
+    ty: Type,
+}
+
+impl From<Parameter> for DefineVariable {
+    fn from(p: Parameter) -> Self {
+        Self {
+            name: p.name,
+            ty: p.ty,
+        }
+    }
+}
+
+impl DefineVariable {
+    pub fn new(name: String, ty: Type) -> Self {
+        Self { name, ty }
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn ty(&self) -> &Type {
+        &self.ty
     }
 }
 
@@ -587,7 +668,7 @@ pub enum Node {
     LocalVariable(LocalVariable),
     Num(i64),
     Block(Vec<Node>),
-    DefineVariable(String),
+    DefineVariable(DefineVariable),
 }
 
 impl Node {
