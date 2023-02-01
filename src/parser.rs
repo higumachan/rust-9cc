@@ -6,6 +6,43 @@ use std::iter::Peekable;
 
 use std::vec::IntoIter;
 
+struct LocalVariableAssigner {
+    local_variables: HashMap<String, (usize, Type)>,
+    current_offset: usize,
+}
+
+impl LocalVariableAssigner {
+    pub fn new() -> Self {
+        Self {
+            local_variables: HashMap::new(),
+            current_offset: 0,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.current_offset = 0;
+        self.local_variables.clear();
+    }
+
+    pub fn assign_local_variable(&mut self, variable: &DefineVariable) -> Option<usize> {
+        let variable_name = variable.name();
+        if !self.local_variables.contains_key(variable_name) {
+            self.current_offset += REGISTER_SIZE;
+            self.local_variables.insert(
+                variable_name.to_string(),
+                (self.current_offset, variable.ty().clone()),
+            );
+            Some(REGISTER_SIZE)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_local_variable(&mut self, variable_name: &str) -> Option<(usize, Type)> {
+        self.local_variables.get(variable_name).cloned()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Parameter {
     name: String,
@@ -29,8 +66,9 @@ pub enum ParseError {
     ExpectReserved(String),
     ExpectNumber,
     ExpectFunctionDefine,
-    ExpectInt,
+    ExpectInt(Token),
     ExpectIdent,
+    NotDefinedVariable(String),
 }
 
 impl Display for ParseError {
@@ -39,20 +77,20 @@ impl Display for ParseError {
     }
 }
 
-pub const INTEGER_SIZE: usize = 8;
+pub const REGISTER_SIZE: usize = 8;
 
 pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 pub struct TokenStream {
     inner: Peekable<IntoIter<Token>>,
-    local_variables: HashMap<String, LocalVariable>,
+    local_variables: LocalVariableAssigner,
 }
 
 impl TokenStream {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             inner: tokens.into_iter().peekable(),
-            local_variables: HashMap::new(),
+            local_variables: LocalVariableAssigner::new(),
         }
     }
 
@@ -77,14 +115,12 @@ impl TokenStream {
             } else {
                 let lv = self
                     .local_variables
-                    .entry(ident_name.clone())
-                    .or_insert_with(move || {
-                        let local_variable = LocalVariable::new(ident_name.to_string());
-
-                        local_variable
-                    })
+                    .get_local_variable(ident_name.as_str())
+                    .ok_or_else(|| ParseError::NotDefinedVariable(ident_name.to_string()))?
                     .clone();
-                Ok(Node::LocalVariable(lv))
+                Ok(Node::LocalVariable(LocalVariable::new(
+                    ident_name, lv.0, lv.1,
+                )))
             }
         } else {
             let number = self.expect_number()?;
@@ -208,7 +244,9 @@ impl TokenStream {
         } else if let Some(ty) = self.consume_type() {
             let name = self.expect_ident()?;
             self.expect(";")?;
-            Ok(Node::DefineVariable(DefineVariable::new(name, ty)))
+            let dv = DefineVariable::new(name, ty);
+            self.local_variables.assign_local_variable(&dv);
+            Ok(Node::DefineVariable(dv))
         } else if self.consume_if() {
             self.expect("(")?;
             let cond = self.expr()?;
@@ -304,7 +342,12 @@ impl TokenStream {
         self.expect_int()?;
         let name = self.expect_ident()?;
 
+        self.local_variables.clear();
         let params = self.param_list()?;
+        for p in &params {
+            self.local_variables
+                .assign_local_variable(&DefineVariable::from(p.clone()));
+        }
         self.expect("{")?;
         let mut statements = vec![];
         while !self.consume_reserve("}") {
@@ -360,7 +403,7 @@ impl TokenStream {
                 self.inner.next().unwrap();
                 Ok(())
             }
-            _ => Err(ParseError::ExpectInt),
+            t => Err(ParseError::ExpectInt(t.clone())),
         }
     }
 
@@ -496,17 +539,34 @@ pub enum Type {
     Ptr(Box<Self>),
 }
 
+impl Type {
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Int => 4,
+            Self::Ptr(_) => 8,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LocalVariable {
     name: String,
+    offset: usize,
+    ty: Type,
 }
 
 impl LocalVariable {
-    pub fn new(name: String) -> Self {
-        Self { name }
+    pub fn new(name: String, offset: usize, ty: Type) -> Self {
+        Self { name, offset, ty }
     }
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+    pub fn ty(&self) -> &Type {
+        &self.ty
     }
 }
 

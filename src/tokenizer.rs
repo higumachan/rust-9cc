@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::iter::Peekable;
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Token {
     Reserved(String),
     Ident(String),

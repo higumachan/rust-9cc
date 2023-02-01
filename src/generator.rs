@@ -1,45 +1,8 @@
-use crate::parser::{DefineVariable, Node, Operator2, Parameter, INTEGER_SIZE};
+use crate::parser::{DefineVariable, Node, Operator2, Parameter, REGISTER_SIZE};
 use std::collections::HashMap;
-
-struct LocalVariableAssigner {
-    local_variables: HashMap<String, usize>,
-    next_offset: usize,
-}
-
-impl LocalVariableAssigner {
-    pub fn new() -> Self {
-        Self {
-            local_variables: HashMap::new(),
-            next_offset: INTEGER_SIZE,
-        }
-    }
-
-    fn clear(&mut self) {
-        self.next_offset = INTEGER_SIZE;
-        self.local_variables.clear();
-    }
-
-    pub fn assign_local_variable(&mut self, variable: &DefineVariable) -> Option<usize> {
-        let variable_name = variable.name();
-        if !self.local_variables.contains_key(variable_name) {
-            let ret = self.next_offset;
-            self.local_variables
-                .insert(variable_name.to_string(), self.next_offset);
-            self.next_offset += INTEGER_SIZE;
-            Some(ret)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_local_variable(&mut self, variable_name: &str) -> Option<usize> {
-        self.local_variables.get(variable_name).copied()
-    }
-}
 
 pub struct Generator {
     next_label: usize,
-    local_variable_assigner: LocalVariableAssigner,
 }
 
 #[derive(Debug)]
@@ -56,10 +19,7 @@ const REGISTERS: [&'static str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl Generator {
     pub fn new() -> Self {
-        Self {
-            next_label: 0,
-            local_variable_assigner: LocalVariableAssigner::new(),
-        }
+        Self { next_label: 0 }
     }
 
     fn assign_next_label(&mut self) -> usize {
@@ -79,10 +39,7 @@ impl Generator {
             }
             Node::LocalVariable(var) => {
                 // println!("  ; local variable: {}", var.name());
-                let offset = self
-                    .local_variable_assigner
-                    .get_local_variable(var.name())
-                    .ok_or_else(|| GenerateError::UndefinedVariable(var.name().to_string()))?;
+                let offset = var.offset();
 
                 println!("  mov rax, rbp");
                 println!("  sub rax, {}", offset);
@@ -108,11 +65,7 @@ impl Generator {
                 println!("  push rax");
             }
             Node::DefineVariable(dv) => {
-                let offset = self
-                    .local_variable_assigner
-                    .assign_local_variable(dv)
-                    .ok_or(GenerateError::DuplicatedVariable)?;
-                println!("  sub rsp, {}", offset);
+                println!("  sub rsp, {}", REGISTER_SIZE);
                 println!("  push rsp");
             }
             Node::Assign { left, right } => {
@@ -188,6 +141,8 @@ impl Generator {
                 println!(".Lelse{}:", if_label);
                 if let Some(else_statement) = if_and_else.else_statement() {
                     self.gen(else_statement.as_ref())?;
+                } else {
+                    println!("  push 0");
                 }
                 println!(".Lend{}:", if_label);
             }
@@ -213,7 +168,7 @@ impl Generator {
             Node::Block(statements) => {
                 for s in statements {
                     self.gen(s)?;
-                    println!("pop rax");
+                    println!("  pop rax");
                 }
             }
 
@@ -231,16 +186,11 @@ impl Generator {
                 println!("  push rax");
             }
             Node::DefineFunction(define_function) => {
-                self.local_variable_assigner.clear();
                 println!("{}:", define_function.name());
                 println!("  push rbp");
                 println!("  mov rbp, rsp");
                 for (register, param) in REGISTERS.iter().zip(define_function.params().iter()) {
                     println!("  push {}", register);
-                    let _ = self
-                        .local_variable_assigner
-                        .assign_local_variable(&(param.clone().into()))
-                        .ok_or(GenerateError::DuplicatedVariable)?;
                 }
                 // println!("  sub rsp, {}", INTEGER_SIZE * 26); // FIXME(higumachan): 一旦26個のローカル変数用のスタックを用意する. 変数定義があるのでもうすでに必要ないが,互換性のために残している.
 
