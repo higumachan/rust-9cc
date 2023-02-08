@@ -69,6 +69,7 @@ pub enum ParseError {
     ExpectInt(Token),
     ExpectIdent,
     NotDefinedVariable(String),
+    NotDefinedFunction(String),
 }
 
 impl Display for ParseError {
@@ -84,6 +85,7 @@ pub type ParseResult<T> = std::result::Result<T, ParseError>;
 pub struct TokenStream {
     inner: Peekable<IntoIter<Token>>,
     local_variables: LocalVariableAssigner,
+    global_symbols: HashMap<String, Option<Type>>,
 }
 
 impl TokenStream {
@@ -91,6 +93,7 @@ impl TokenStream {
         Self {
             inner: tokens.into_iter().peekable(),
             local_variables: LocalVariableAssigner::new(),
+            global_symbols: HashMap::new(),
         }
     }
 
@@ -111,7 +114,11 @@ impl TokenStream {
                         args.push(self.expr()?);
                     }
                 }
-                Ok(Node::CallFunction(CallFunction::new(ident_name, args)))
+                Ok(Node::CallFunction(CallFunction::new(
+                    ident_name,
+                    args,
+                    Some(Type::Int),
+                )))
             } else {
                 let lv = self
                     .local_variables
@@ -341,6 +348,7 @@ impl TokenStream {
     pub fn expect_define_function(&mut self) -> ParseResult<Node> {
         self.expect_int()?;
         let name = self.expect_ident()?;
+        self.global_symbols.insert(name.clone(), Some(Type::Int));
 
         self.local_variables.clear();
         let params = self.param_list()?;
@@ -354,9 +362,9 @@ impl TokenStream {
             statements.push(self.statement()?);
         }
 
-        Ok(Node::DefineFunction(DefineFunction::new(
-            name, params, statements,
-        )))
+        let node = Node::DefineFunction(DefineFunction::new(name.clone(), params, statements));
+
+        Ok(node)
     }
 
     fn consume_int(&mut self) -> bool {
@@ -521,7 +529,7 @@ impl TokenStream {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Operator2 {
     Add,
     Sub,
@@ -570,7 +578,7 @@ impl LocalVariable {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfElse {
     condition: Box<Node>,
     then_statement: Box<Node>,
@@ -600,7 +608,7 @@ impl IfElse {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct For {
     init: Option<Box<Node>>,
     cond: Option<Box<Node>>,
@@ -636,10 +644,11 @@ impl For {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallFunction {
     name: String,
     args: Vec<Node>,
+    return_type: Option<Type>,
 }
 
 impl CallFunction {
@@ -649,12 +658,17 @@ impl CallFunction {
     pub fn args(&self) -> &Vec<Node> {
         &self.args
     }
-    pub fn new(name: String, args: Vec<Node>) -> Self {
-        Self { name, args }
+
+    pub fn new(name: String, args: Vec<Node>, return_type: Option<Type>) -> Self {
+        Self {
+            name,
+            args,
+            return_type,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DefineFunction {
     name: String,
     params: Vec<Parameter>,
@@ -680,7 +694,7 @@ impl DefineFunction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DefineVariable {
     name: String,
     ty: Type,
@@ -707,7 +721,7 @@ impl DefineVariable {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Node {
     Operator2 {
         op: Operator2,
@@ -743,6 +757,18 @@ impl Node {
     pub fn as_local_value(&self) -> Option<&LocalVariable> {
         match self {
             Self::LocalVariable(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn declare_type(&self) -> Option<Type> {
+        match self {
+            Self::LocalVariable(lv) => Some(lv.ty.clone()),
+            Self::Operator2 { left, .. } => left.declare_type(),
+            Self::Deref(v) => v.declare_type(),
+            Self::Addr(v) => Some(Type::Ptr(Box::new(v.declare_type().unwrap().clone()))),
+            Self::Num(_) => Some(Type::Int),
+            Self::CallFunction(cf) => cf.return_type.clone(),
             _ => None,
         }
     }

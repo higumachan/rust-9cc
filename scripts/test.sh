@@ -33,8 +33,8 @@ assert() {
   fi
 }
 
-#assert 8 "int main() {int *p; alloc4(&p, 1, 2, 4, 8); int *q; q = p + 2; q = p + 3; return *q;"
-#assert 4 "int main() {int *p; alloc4(&p, 1, 2, 4, 8); int *q; q = p + 2; return *q;"
+assert 8 "int main() {int *p; alloc4(&p, 1, 2, 4, 8); int *q; q = p + 2; q = p + 3; return *q;}"
+assert 4 "int main() {int *p; alloc4(&p, 1, 2, 4, 8); int *q; q = p + 2; return *q;}"
 assert 55 "int main() {int foo; int i; foo = 0; i = 1; while(i <= 10) { foo = foo + i; i = i + 1; } return foo; }"
 assert 45 "int f(int n) {int foo; int i; foo = 0; for (i = 1; i <= n; i = i + 1) foo = foo + i; return foo; } int main() { return f(9); }"
 assert 0 "int fib(int n) { if (n == 0) { return 0; } if (n == 1) { return 1; } return fib(n - 1) + fib(n - 2); } int main() { return fib(0); }"

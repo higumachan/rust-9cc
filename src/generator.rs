@@ -1,4 +1,4 @@
-use crate::parser::{DefineVariable, Node, Operator2, Parameter, REGISTER_SIZE};
+use crate::parser::{DefineVariable, Node, Operator2, Parameter, Type, REGISTER_SIZE};
 use std::collections::HashMap;
 
 pub struct Generator {
@@ -11,6 +11,7 @@ pub enum GenerateError {
     CallArgsOverFlow,
     DuplicatedVariable,
     UndefinedVariable(String),
+    InvalidTypeSize(usize),
 }
 
 type GenerateResult = Result<(), GenerateError>;
@@ -86,6 +87,23 @@ impl Generator {
 
                 match op {
                     Operator2::Add => {
+                        let left_type = left.declare_type().expect("type error");
+
+                        match left_type {
+                            Type::Ptr(inner_type) => {
+                                let sz = inner_type.size();
+                                match sz {
+                                    4 => {
+                                        println!("  shl rdi, 2");
+                                    }
+                                    8 => {
+                                        println!("  shl rdi, 3");
+                                    }
+                                    _ => return Err(GenerateError::InvalidTypeSize(sz)),
+                                }
+                            }
+                            _ => {}
+                        }
                         println!("  add rax, rdi");
                     }
                     Operator2::Sub => {
