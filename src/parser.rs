@@ -573,6 +573,12 @@ pub enum Type {
 }
 
 impl Type {
+    fn as_ptr(&self) -> Option<&Self> {
+        match self {
+            Self::Ptr(ty) => Some(ty),
+            _ => None,
+        }
+    }
     pub fn size(&self) -> usize {
         match self {
             Self::Int => 4,
@@ -791,7 +797,12 @@ impl Node {
         match self {
             Self::LocalVariable(lv) => Some(lv.ty.clone()),
             Self::Operator2 { left, .. } => left.declare_type(),
-            Self::Deref(v) => v.declare_type(),
+            Self::Deref(v) => Some(
+                v.declare_type()
+                    .and_then(|x| x.as_ptr().cloned())
+                    .expect("Derefの中身はポインタ型")
+                    .clone(),
+            ),
             Self::Addr(v) => Some(Type::Ptr(Box::new(v.declare_type().unwrap().clone()))),
             Self::Num(_) => Some(Type::Int),
             Self::CallFunction(cf) => cf.return_type.clone(),
