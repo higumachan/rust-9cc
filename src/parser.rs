@@ -100,7 +100,7 @@ impl TokenStream {
     pub fn primary(&mut self) -> ParseResult<Node> {
         if self.consume_reserve("(") {
             let node = self.expr()?;
-            self.expect(")")?;
+            self.expect_reserve(")")?;
             Ok(node)
         } else if let Some(ident_name) = self.consume_ident() {
             let ident_name = ident_name.clone();
@@ -110,7 +110,7 @@ impl TokenStream {
                 if !self.consume_reserve(")") {
                     args.push(self.expr()?);
                     while !self.consume_reserve(")") {
-                        self.expect(",")?;
+                        self.expect_reserve(",")?;
                         args.push(self.expr()?);
                     }
                 }
@@ -138,6 +138,7 @@ impl TokenStream {
     pub fn unary(&mut self) -> ParseResult<Node> {
         if self.consume_sizeof() {
             let un = self.unary()?;
+            dbg!(&un);
             Ok(Node::Num(
                 un.declare_type().expect("unaryは必ず返り値型を持つ").size() as i64,
             ))
@@ -254,15 +255,23 @@ impl TokenStream {
             }
             Ok(Node::Block(statements))
         } else if let Some(ty) = self.consume_type() {
+            let mut ty = ty;
             let name = self.expect_ident()?;
-            self.expect(";")?;
+
+            if self.consume_reserve("[") {
+                let num = self.expect_number()?;
+                self.expect_reserve("]")?;
+                ty = Type::Array(Box::new(ty), num as usize);
+            }
+
+            self.expect_reserve(";")?;
             let dv = DefineVariable::new(name, ty);
             self.local_variables.assign_local_variable(&dv);
             Ok(Node::DefineVariable(dv))
         } else if self.consume_if() {
-            self.expect("(")?;
+            self.expect_reserve("(")?;
             let cond = self.expr()?;
-            self.expect(")")?;
+            self.expect_reserve(")")?;
             let then_statement = self.statement()?;
             let else_statement = if self.consume_else() {
                 let else_statement = self.statement()?;
@@ -276,24 +285,24 @@ impl TokenStream {
                 else_statement.map(Box::new),
             )))
         } else if self.consume_for() {
-            self.expect("(")?;
+            self.expect_reserve("(")?;
             let init = if !self.consume_reserve(";") {
                 let init = self.expr()?;
-                self.expect(";")?;
+                self.expect_reserve(";")?;
                 Some(init)
             } else {
                 None
             };
             let cond = if !self.consume_reserve(";") {
                 let cond = self.expr()?;
-                self.expect(";")?;
+                self.expect_reserve(";")?;
                 Some(cond)
             } else {
                 None
             };
             let next = if !self.consume_reserve(")") {
                 let next = self.expr()?;
-                self.expect(")")?;
+                self.expect_reserve(")")?;
                 Some(next)
             } else {
                 None
@@ -308,9 +317,9 @@ impl TokenStream {
                 body.into(),
             )))
         } else if self.consume_while() {
-            self.expect("(")?;
+            self.expect_reserve("(")?;
             let cond = self.expr()?;
-            self.expect(")")?;
+            self.expect_reserve(")")?;
             let body = self.statement()?;
 
             Ok(Node::For(For::new(
@@ -323,7 +332,7 @@ impl TokenStream {
             let is_return = self.consume_return();
 
             let node = self.expr()?;
-            self.expect(";")?;
+            self.expect_reserve(";")?;
 
             if is_return {
                 Ok(Node::Return(node.into()))
@@ -335,13 +344,13 @@ impl TokenStream {
 
     fn param_list(&mut self) -> ParseResult<Vec<Parameter>> {
         let mut params = vec![];
-        self.expect("(")?;
+        self.expect_reserve("(")?;
         if !self.consume_reserve(")") {
             let ty = self.expect_type()?;
             let name = self.expect_ident()?;
             params.push(Parameter::new(name, ty));
             while !self.consume_reserve(")") {
-                self.expect(",")?;
+                self.expect_reserve(",")?;
                 let ty = self.expect_type()?;
                 let name = self.expect_ident()?;
                 params.push(Parameter::new(name, ty));
@@ -361,7 +370,7 @@ impl TokenStream {
             self.local_variables
                 .assign_local_variable(&DefineVariable::from(p.clone()));
         }
-        self.expect("{")?;
+        self.expect_reserve("{")?;
         let mut statements = vec![];
         while !self.consume_reserve("}") {
             statements.push(self.statement()?);
@@ -522,7 +531,7 @@ impl TokenStream {
         }
     }
 
-    pub fn expect(&mut self, op: &str) -> ParseResult<()> {
+    pub fn expect_reserve(&mut self, op: &str) -> ParseResult<()> {
         match self.inner.next().unwrap() {
             Token::Reserved(s) if s.as_str() == op => Ok(()),
             _ => Err(ParseError::ExpectReserved(op.to_string())),
@@ -560,6 +569,7 @@ pub enum Operator2 {
 pub enum Type {
     Int,
     Ptr(Box<Self>),
+    Array(Box<Self>, usize),
 }
 
 impl Type {
@@ -567,6 +577,7 @@ impl Type {
         match self {
             Self::Int => 4,
             Self::Ptr(_) => 8,
+            Self::Array(ty, num) => ty.size() * num,
         }
     }
 }

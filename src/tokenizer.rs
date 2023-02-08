@@ -183,6 +183,12 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
         } else if match_string(&cs, "&") {
             tokens.push(Token::Reserved("&".to_string()));
             cs.next();
+        } else if match_string(&cs, "[") {
+            tokens.push(Token::Reserved("[".to_string()));
+            cs.next();
+        } else if match_string(&cs, "]") {
+            tokens.push(Token::Reserved("]".to_string()));
+            cs.next();
         } else if match_string(&cs, "return") {
             tokens.push(Token::Return);
             for _ in 0..6 {
@@ -214,6 +220,7 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
                 cs.next();
             }
         } else if match_string(&cs, "sizeof") {
+            tokens.push(Token::Sizeof);
             for _ in 0..6 {
                 cs.next();
             }

@@ -14,10 +14,10 @@ fn main() {
     let p = argv[1].as_str();
     let tokens = tokenize(p).unwrap();
 
+    dbg!(&tokens);
+
     let mut token_stream = TokenStream::new(tokens);
     let code = token_stream.program().unwrap();
-
-    dbg!(&code);
 
     let mut generator = Generator::new();
 
