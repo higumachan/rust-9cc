@@ -136,7 +136,12 @@ impl TokenStream {
     }
 
     pub fn unary(&mut self) -> ParseResult<Node> {
-        if self.consume_reserve("+") {
+        if self.consume_sizeof() {
+            let un = self.unary()?;
+            Ok(Node::Num(
+                un.declare_type().expect("unaryは必ず返り値型を持つ").size() as i64,
+            ))
+        } else if self.consume_reserve("+") {
             self.primary()
         } else if self.consume_reserve("-") {
             Ok(Node::new_op2(
@@ -370,6 +375,16 @@ impl TokenStream {
     fn consume_int(&mut self) -> bool {
         match self.inner.peek().unwrap() {
             Token::Int => {
+                self.inner.next().unwrap();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn consume_sizeof(&mut self) -> bool {
+        match self.inner.peek().unwrap() {
+            Token::Sizeof => {
                 self.inner.next().unwrap();
                 true
             }

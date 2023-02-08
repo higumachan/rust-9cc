@@ -33,6 +33,9 @@ assert() {
   fi
 }
 
+assert 4 "int main() {int *a; return sizeof(*a);}"
+assert 8 "int main() {int *a; return sizeof(a);}"
+assert 4 "int main() {int a; return sizeof(a);}"
 assert 8 "int main() {int *p; alloc4(&p, 1, 2, 4, 8); int *q; q = p + 2; q = p + 3; return *q;}"
 assert 4 "int main() {int *p; alloc4(&p, 1, 2, 4, 8); int *q; q = p + 2; return *q;}"
 assert 55 "int main() {int foo; int i; foo = 0; i = 1; while(i <= 10) { foo = foo + i; i = i + 1; } return foo; }"
