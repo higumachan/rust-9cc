@@ -27,12 +27,12 @@ impl LocalVariableAssigner {
     pub fn assign_local_variable(&mut self, variable: &DefineVariable) -> Option<usize> {
         let variable_name = variable.name();
         if !self.local_variables.contains_key(variable_name) {
-            self.current_offset += REGISTER_SIZE;
+            self.current_offset += variable.ty.aligned_size();
             self.local_variables.insert(
                 variable_name.to_string(),
                 (self.current_offset, variable.ty().clone()),
             );
-            Some(REGISTER_SIZE)
+            Some(variable.ty.size())
         } else {
             None
         }
@@ -120,13 +120,13 @@ impl TokenStream {
                     Some(Type::Int),
                 )))
             } else {
-                let lv = self
+                let (offset, ty) = self
                     .local_variables
                     .get_local_variable(ident_name.as_str())
                     .ok_or_else(|| ParseError::NotDefinedVariable(ident_name.to_string()))?
                     .clone();
                 Ok(Node::LocalVariable(LocalVariable::new(
-                    ident_name, lv.0, lv.1,
+                    ident_name, offset, ty,
                 )))
             }
         } else {
@@ -137,13 +137,15 @@ impl TokenStream {
 
     pub fn unary(&mut self) -> ParseResult<Node> {
         if self.consume_sizeof() {
+            self.expect_reserve("(")?;
             let un = self.unary()?;
             dbg!(&un);
+            self.expect_reserve(")")?;
             Ok(Node::Num(
                 un.declare_type().expect("unaryは必ず返り値型を持つ").size() as i64,
             ))
         } else if self.consume_reserve("+") {
-            self.primary()
+            Ok(self.primary()?)
         } else if self.consume_reserve("-") {
             Ok(Node::new_op2(
                 Operator2::Sub,
@@ -151,16 +153,18 @@ impl TokenStream {
                 Box::new(self.primary()?),
             ))
         } else if self.consume_reserve("*") {
-            Ok(Node::Deref(self.unary()?.into()))
+            Ok(Node::Deref(
+                self.unary()?.array_access_to_relative_address().into(),
+            ))
         } else if self.consume_reserve("&") {
             Ok(Node::Addr(self.unary()?.into()))
         } else {
-            self.primary()
+            Ok(self.primary()?)
         }
     }
 
     pub fn mul(&mut self) -> ParseResult<Node> {
-        let mut node = self.unary()?;
+        let mut node = self.unary()?.array_access_to_relative_address();
 
         loop {
             node = if self.consume_reserve("*") {
@@ -586,6 +590,23 @@ impl Type {
             Self::Array(ty, num) => ty.size() * num,
         }
     }
+
+    pub fn aligned_size(&self) -> usize {
+        let size = self.size();
+
+        if size % REGISTER_SIZE == 0 {
+            size
+        } else {
+            size + REGISTER_SIZE - (size % REGISTER_SIZE)
+        }
+    }
+
+    pub fn implicit_conversion(self) -> Self {
+        match self {
+            Self::Array(ty, _) => *ty.clone(), // 単体で評価した場合はAddrが挟まるのでIntに
+            _ => self,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -775,6 +796,7 @@ pub enum Node {
     Num(i64),
     Block(Vec<Node>),
     DefineVariable(DefineVariable),
+    RelativeAddress(usize, Type),
 }
 
 impl Node {
@@ -796,17 +818,30 @@ impl Node {
     pub fn declare_type(&self) -> Option<Type> {
         match self {
             Self::LocalVariable(lv) => Some(lv.ty.clone()),
-            Self::Operator2 { left, .. } => left.declare_type(),
+            Self::Operator2 { left, .. } => Some(left.declare_type()?),
             Self::Deref(v) => Some(
-                v.declare_type()
-                    .and_then(|x| x.as_ptr().cloned())
-                    .expect("Derefの中身はポインタ型")
+                v.declare_type()?
+                    .as_ptr()
+                    .cloned()
+                    .expect("Derefの中身はポインタ型に暗黙的に変換出来る型")
                     .clone(),
             ),
             Self::Addr(v) => Some(Type::Ptr(Box::new(v.declare_type().unwrap().clone()))),
             Self::Num(_) => Some(Type::Int),
             Self::CallFunction(cf) => cf.return_type.clone(),
+            Self::RelativeAddress(_, ty) => Some(ty.clone()),
             _ => None,
+        }
+    }
+
+    fn array_access_to_relative_address(self) -> Self {
+        match self {
+            Self::LocalVariable(LocalVariable {
+                ty: Type::Array(inner_ty, _),
+                offset,
+                ..
+            }) => Self::RelativeAddress(offset, Type::Ptr(Box::new(*inner_ty.clone()))),
+            x => x,
         }
     }
 }

@@ -33,6 +33,8 @@ assert() {
   fi
 }
 
+assert 5 "int main() { int a[3]; int *p; *a = 5; return *a; }"
+assert 3 "int main() { int a[3]; int *p; *a = 1; *(a + 1) = 2; p = a; return *a + *(a + 1); }"
 assert 40 "int main() {int a[10]; return sizeof(a);}"
 assert 4 "int main() {int *a; return sizeof(*a);}"
 assert 8 "int main() {int *a; return sizeof(a);}"

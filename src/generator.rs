@@ -46,6 +46,7 @@ impl Generator {
                 println!("  sub rax, {}", offset);
                 println!("  push rax");
             }
+
             _ => {
                 return Err(GenerateError::NotLeftValue);
             }
@@ -55,6 +56,7 @@ impl Generator {
     }
 
     pub fn gen(&mut self, node: &Node) -> GenerateResult {
+        dbg!(node);
         match node {
             Node::Num(n) => {
                 println!("  push {}", n);
@@ -65,8 +67,13 @@ impl Generator {
                 println!("  mov rax, [rsi]");
                 println!("  push rax");
             }
+            Node::RelativeAddress(offset, _) => {
+                println!("  mov rax, rbp");
+                println!("  sub rax, {}", offset);
+                println!("  push rax");
+            }
             Node::DefineVariable(dv) => {
-                println!("  sub rsp, {}", REGISTER_SIZE);
+                println!("  sub rsp, {}", dv.ty().aligned_size());
                 println!("  push rsp");
             }
             Node::Assign { left, right } => {
@@ -88,10 +95,12 @@ impl Generator {
                 match op {
                     Operator2::Add => {
                         let left_type = left.declare_type().expect("type error");
+                        dbg!(&left_type);
 
                         match left_type {
                             Type::Ptr(inner_type) => {
                                 let sz = inner_type.size();
+                                dbg!(sz);
                                 match sz {
                                     4 => {
                                         println!("  shl rdi, 2");

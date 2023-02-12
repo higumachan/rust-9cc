@@ -232,7 +232,7 @@ pub fn tokenize(input: &str) -> TokenizeResult<Vec<Token>> {
             }
         } else {
             match c {
-                ' ' => {
+                ' ' | '\n' => {
                     cs.next();
                 }
                 c if c.is_ascii_digit() => {
